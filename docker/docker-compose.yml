@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: velora-mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - velora-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  recommendation-service:
+    build:
+      context: ../recommendation-service
+      dockerfile: Dockerfile
+    container_name: velora-recommendation-service
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - RECOMMENDATION_PORT=8000
+      - MONGO_URI=mongodb://mongodb:27017/velora
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - velora-network
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: velora-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - MONGO_URI=mongodb://mongodb:27017/velora
+      - JWT_SECRET=velora_jwt_secret_dev
+      - RECOMMENDATION_SERVICE_URL=http://recommendation-service:8000
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      recommendation-service:
+        condition: service_healthy
+    networks:
+      - velora-network
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: velora-frontend
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - velora-network
+
+networks:
+  velora-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
+    driver: local

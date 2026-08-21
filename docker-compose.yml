@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # 1. MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: velora-mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - velora-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. Python FastAPI Recommendation Microservice
+  recommendation-service:
+    build:
+      context: ./recommendation-service
+      dockerfile: Dockerfile
+    container_name: velora-recommendation-service
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - RECOMMENDATION_PORT=8000
+      - MONGO_URI=mongodb://mongodb:27017/velora
+      - PYTHON_ENV=production
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - velora-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # 3. Node.js / Express Backend REST API Gateway
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: velora-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - MONGO_URI=mongodb://mongodb:27017/velora
+      - JWT_SECRET=velora_production_jwt_secret_key_change_in_production
+      - JWT_EXPIRE=7d
+      - RECOMMENDATION_SERVICE_URL=http://recommendation-service:8000
+      - CLIENT_URL=http://localhost:5173
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      recommendation-service:
+        condition: service_healthy
+    networks:
+      - velora-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # 4. React Frontend Web Application (Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: velora-frontend
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - velora-network
+
+networks:
+  velora-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
+    driver: local
