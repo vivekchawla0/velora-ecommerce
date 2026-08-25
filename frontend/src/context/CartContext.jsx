@@ -75,6 +75,48 @@ export const CartProvider = ({ children }) => {
     }
   }, [cart]);
 
+  // Check if product exists in cart
+  const isInCart = useCallback(
+    (productOrId) => {
+      if (!productOrId) return false;
+      const targetIds = new Set();
+      let targetName = null;
+
+      if (typeof productOrId === 'object') {
+        if (productOrId._id) targetIds.add(String(productOrId._id));
+        if (productOrId.id) targetIds.add(String(productOrId.id));
+        if (productOrId.sku) targetIds.add(String(productOrId.sku));
+        if (productOrId.productId) targetIds.add(String(productOrId.productId));
+        if (productOrId.name) targetName = String(productOrId.name).toLowerCase().trim();
+      } else {
+        targetIds.add(String(productOrId));
+      }
+
+      return cart.some((item) => {
+        const itemProd = item.product;
+        if (!itemProd) return false;
+
+        const itemIds = [
+          item.productId ? String(item.productId) : null,
+          itemProd?._id ? String(itemProd._id) : null,
+          itemProd?.id ? String(itemProd.id) : null,
+          itemProd?.sku ? String(itemProd.sku) : null,
+          typeof itemProd === 'string' ? itemProd : null,
+        ].filter(Boolean);
+
+        const idMatch = itemIds.some((id) => targetIds.has(id));
+        if (idMatch) return true;
+
+        if (targetName && itemProd?.name) {
+          return String(itemProd.name).toLowerCase().trim() === targetName;
+        }
+
+        return false;
+      });
+    },
+    [cart]
+  );
+
   // Add Item to Cart
   const addToCart = async (product, quantity = 1) => {
     const pId = product?._id || product?.id || product?.sku;
@@ -87,8 +129,6 @@ export const CartProvider = ({ children }) => {
       return { success: false };
     }
 
-    const previousCart = [...cart];
-
     // 1. Instantly update local cart state & header count (0ms response)
     setCart((prev) => {
       const existingIndex = prev.findIndex((item) => {
@@ -100,7 +140,12 @@ export const CartProvider = ({ children }) => {
           itemProd?.sku ? String(itemProd.sku) : null,
         ].filter(Boolean);
         const targetIds = [product._id, product.id, product.sku, pId].filter(Boolean).map(String);
-        return itemIds.some((id) => targetIds.includes(id));
+        const matchId = itemIds.some((id) => targetIds.includes(id));
+        if (matchId) return true;
+        if (product.name && itemProd?.name) {
+          return String(itemProd.name).toLowerCase().trim() === String(product.name).toLowerCase().trim();
+        }
+        return false;
       });
 
       if (existingIndex > -1) {
@@ -140,16 +185,31 @@ export const CartProvider = ({ children }) => {
           quantity: qty,
         });
 
-        if (res.data?.cart?.items) {
-          setCart(res.data.cart.items);
+        if (res.data?.cart?.items && Array.isArray(res.data.cart.items) && res.data.cart.items.length > 0) {
+          setCart((prev) => {
+            const serverItems = res.data.cart.items;
+            const merged = [...serverItems];
+            for (const localItem of prev) {
+              const localProd = localItem.product;
+              const localName = localProd?.name ? String(localProd.name).toLowerCase().trim() : null;
+              const localId = String(localProd?._id || localProd?.id || localItem.productId || '');
+
+              const existsInServer = serverItems.some((sItem) => {
+                const sProd = sItem.product;
+                const sName = sProd?.name ? String(sProd.name).toLowerCase().trim() : null;
+                const sId = String(sProd?._id || sProd?.id || sItem.productId || '');
+                return (localId && sId && localId === sId) || (localName && sName && localName === sName);
+              });
+
+              if (!existsInServer) {
+                merged.push(localItem);
+              }
+            }
+            return merged;
+          });
         }
-        return { success: true };
       } catch (err) {
-        // Rollback on server error
-        setCart(previousCart);
-        const msg = err.response?.data?.message || 'Failed to add item to cart';
-        toast.error(msg);
-        return { success: false, message: msg };
+        console.warn('Background cart sync warning:', err.message);
       }
     }
 
@@ -232,36 +292,7 @@ export const CartProvider = ({ children }) => {
     localStorage.removeItem('nexacart_cart');
   };
 
-  // Check if product exists in cart
-  const isInCart = useCallback(
-    (productOrId) => {
-      if (!productOrId) return false;
-      const targetIds = new Set();
 
-      if (typeof productOrId === 'object') {
-        if (productOrId._id) targetIds.add(String(productOrId._id));
-        if (productOrId.id) targetIds.add(String(productOrId.id));
-        if (productOrId.sku) targetIds.add(String(productOrId.sku));
-        if (productOrId.productId) targetIds.add(String(productOrId.productId));
-      } else {
-        targetIds.add(String(productOrId));
-      }
-
-      return cart.some((item) => {
-        const itemProd = item.product;
-        const itemIds = [
-          item.productId ? String(item.productId) : null,
-          itemProd?._id ? String(itemProd._id) : null,
-          itemProd?.id ? String(itemProd.id) : null,
-          itemProd?.sku ? String(itemProd.sku) : null,
-          typeof itemProd === 'string' ? itemProd : null,
-        ].filter(Boolean);
-
-        return itemIds.some((id) => targetIds.has(id));
-      });
-    },
-    [cart]
-  );
 
   // Calculations
   const totalItems = cart.reduce((sum, item) => sum + (item.quantity || 1), 0);
