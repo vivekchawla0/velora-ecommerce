@@ -77,77 +77,83 @@ export const CartProvider = ({ children }) => {
 
   // Add Item to Cart
   const addToCart = async (product, quantity = 1) => {
-    if (!product || !product._id) return { success: false };
+    const pId = product?._id || product?.id || product?.sku;
+    if (!product || !pId) return { success: false };
 
     const qty = Math.max(1, parseInt(quantity, 10) || 1);
-    const token = getAuthToken();
 
-    // Check client-side stock availability first
     if (product.stock !== undefined && product.stock < qty) {
       toast.error(`Only ${product.stock} units available in stock.`);
       return { success: false };
     }
 
-    setActionLoading(true);
+    const previousCart = [...cart];
 
+    // 1. Instantly update local cart state & header count (0ms response)
+    setCart((prev) => {
+      const existingIndex = prev.findIndex((item) => {
+        const itemProd = item.product;
+        const itemIds = [
+          item.productId ? String(item.productId) : null,
+          itemProd?._id ? String(itemProd._id) : null,
+          itemProd?.id ? String(itemProd.id) : null,
+          itemProd?.sku ? String(itemProd.sku) : null,
+        ].filter(Boolean);
+        const targetIds = [product._id, product.id, product.sku, pId].filter(Boolean).map(String);
+        return itemIds.some((id) => targetIds.includes(id));
+      });
+
+      if (existingIndex > -1) {
+        const currentQty = prev[existingIndex].quantity || 1;
+        const updatedQty = Math.min(
+          currentQty + qty,
+          product.stock !== undefined ? product.stock : 99
+        );
+        const next = [...prev];
+        next[existingIndex] = {
+          ...next[existingIndex],
+          quantity: updatedQty,
+          itemTotal: Number(((product.price || 0) * updatedQty).toFixed(2)),
+        };
+        return next;
+      }
+
+      return [
+        ...prev,
+        {
+          product,
+          quantity: qty,
+          price: product.price || 0,
+          itemTotal: Number(((product.price || 0) * qty).toFixed(2)),
+        },
+      ];
+    });
+
+    toast.success(`Added ${product.name || 'item'} to cart ✓`);
+
+    // 2. Perform background API call if logged in
+    const token = getAuthToken();
     if (token) {
-      // Authenticated User: Persist in MongoDB
       try {
         const res = await api.post('/cart/add', {
-          productId: product._id,
+          productId: pId,
           quantity: qty,
         });
 
         if (res.data?.cart?.items) {
           setCart(res.data.cart.items);
-          toast.success(`Added ${product.name} to cart ✓`);
-          return { success: true };
         }
+        return { success: true };
       } catch (err) {
+        // Rollback on server error
+        setCart(previousCart);
         const msg = err.response?.data?.message || 'Failed to add item to cart';
         toast.error(msg);
         return { success: false, message: msg };
-      } finally {
-        setActionLoading(false);
       }
-    } else {
-      // Guest User: Local storage with stock validation
-      setCart((prev) => {
-        const existingIndex = prev.findIndex(
-          (item) => (item.product?._id || item.product) === product._id
-        );
-
-        if (existingIndex > -1) {
-          const currentQty = prev[existingIndex].quantity;
-          const updatedQty = Math.min(
-            currentQty + qty,
-            product.stock !== undefined ? product.stock : 99
-          );
-
-          const next = [...prev];
-          next[existingIndex] = {
-            ...next[existingIndex],
-            quantity: updatedQty,
-            itemTotal: Number((product.price * updatedQty).toFixed(2)),
-          };
-          return next;
-        }
-
-        return [
-          ...prev,
-          {
-            product,
-            quantity: qty,
-            price: product.price,
-            itemTotal: Number((product.price * qty).toFixed(2)),
-          },
-        ];
-      });
-
-      toast.success(`Added ${product.name} to cart ✓`);
-      setActionLoading(false);
-      return { success: true };
     }
+
+    return { success: true };
   };
 
   // Update Item Quantity

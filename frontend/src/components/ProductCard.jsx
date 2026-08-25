@@ -183,6 +183,8 @@ const ProductCardComponent = ({
           src={displayImage}
           alt={product.name}
           onError={() => setImgError(true)}
+          draggable={false}
+          onDragStart={(e) => e.preventDefault()}
           style={{
             maxWidth: '100%',
             maxHeight: '100%',
@@ -191,6 +193,9 @@ const ProductCardComponent = ({
             objectFit: 'contain',
             filter: 'drop-shadow(0 4px 10px rgba(0, 0, 0, 0.05))',
             transition: 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            WebkitUserDrag: 'none',
           }}
           className="product-card-image"
           loading="lazy"
@@ -486,7 +491,6 @@ const ProductCardComponent = ({
               minHeight: '2.4rem',
               minWidth: 0,
               flex: '1 1 auto',
-              overflow: 'hidden',
             }}
           >
             {product.originalPrice && product.originalPrice > product.price && (

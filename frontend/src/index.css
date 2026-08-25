@@ -543,9 +543,34 @@ input, select, textarea {
   }
 }
 
+.product-card {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.product-card-title,
+.product-card-price-current,
+.product-card-price-original {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 @media (max-width: 640px) {
   .carousel-item {
-    flex: 0 0 220px;
+    flex: 0 0 215px;
+  }
+  .product-card-price-current {
+    font-size: 1.05rem !important;
+  }
+  .product-card-price-original {
+    font-size: 0.72rem !important;
+  }
+  .product-card-body {
+    padding: 0.85rem 0.95rem 1rem !important;
+  }
+  .product-card-footer {
+    gap: 0.35rem !important;
   }
 }
 

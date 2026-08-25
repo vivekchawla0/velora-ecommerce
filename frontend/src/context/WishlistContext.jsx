@@ -78,30 +78,34 @@ export const WishlistProvider = ({ children }) => {
 
   const toggleWishlist = async (product) => {
     if (!product) return;
-    const pId = product._id || product.id || product;
-    const token = getAuthToken();
+    const pId = product._id || product.id || product.sku || product;
+    const alreadyIn = isInWishlist(product);
+    const previousWishlist = [...wishlist];
 
+    // 1. Instantly update local state & UI (0ms response)
+    if (alreadyIn) {
+      setWishlist((prev) =>
+        prev.filter((item) => {
+          const itemIds = [item._id, item.id, item.sku, typeof item === 'string' ? item : null].filter(Boolean).map(String);
+          const targetIds = [product._id, product.id, product.sku, pId].filter(Boolean).map(String);
+          return !itemIds.some((id) => targetIds.includes(id));
+        })
+      );
+      toast.info(`Removed ${product.name || 'item'} from wishlist`);
+    } else {
+      setWishlist((prev) => [...prev, product]);
+      toast.info(`Saved ${product.name || 'item'} to wishlist`);
+    }
+
+    // 2. Perform background API call if authenticated
+    const token = getAuthToken();
     if (token) {
       try {
-        const res = await api.post(`/wishlist/${pId}`);
-        if (res.data?.inWishlist) {
-          setWishlist((prev) => [...prev, product]);
-          toast.info(`Saved ${product.name || 'item'} to your wishlist`);
-        } else {
-          setWishlist((prev) => prev.filter((item) => (item._id || item.id || item) !== pId));
-          toast.info(`Removed ${product.name || 'item'} from wishlist`);
-        }
+        await api.post(`/wishlist/${pId}`);
       } catch (err) {
-        toast.error(err.response?.data?.message || 'Failed to update wishlist');
-      }
-    } else {
-      // Guest state
-      if (isInWishlist(pId)) {
-        setWishlist((prev) => prev.filter((item) => (item._id || item.id || item) !== pId));
-        toast.info(`Removed from wishlist`);
-      } else {
-        setWishlist((prev) => [...prev, product]);
-        toast.info(`Saved ${product.name || 'item'} to wishlist`);
+        // Rollback local state on server error
+        setWishlist(previousWishlist);
+        toast.error(err.response?.data?.message || 'Failed to sync wishlist with server');
       }
     }
   };
