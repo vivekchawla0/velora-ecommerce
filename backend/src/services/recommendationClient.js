@@ -231,87 +231,52 @@ const getSimilarProducts = async (productId, limit = 6) => {
  * Intelligent cold-start aggregator using interaction weight counts + Bayesian ratings
  */
 const getColdStartTrendingProducts = async (limit = 10, excludeProductIds = []) => {
-  const excludedObjectIds = excludeProductIds
-    .filter((id) => mongoose.Types.ObjectId.isValid(id))
-    .map((id) => new mongoose.Types.ObjectId(id));
+  const exSet = new Set((excludeProductIds || []).map((id) => String(id)));
 
+  let dbProducts = [];
   if (mongoose.connection.readyState === 1) {
     try {
-      const matchStage = excludedObjectIds.length > 0 ? { productId: { $nin: excludedObjectIds } } : {};
+      const validExcludedObjectIds = (excludeProductIds || [])
+        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
 
-      const topInteracted = await Interaction.aggregate([
-        { $match: matchStage },
-        {
-          $group: {
-            _id: '$productId',
-            totalScore: { $sum: '$weight' },
-            interactionCount: { $sum: 1 },
-          },
-        },
-        { $sort: { totalScore: -1 } },
-        { $limit: limit },
-      ]);
-
-      if (topInteracted.length >= 4) {
-        const validIds = topInteracted
-          .map((i) => i._id)
-          .filter((id) => mongoose.Types.ObjectId.isValid(id));
-
-        if (validIds.length > 0) {
-          const products = await Product.find({ _id: { $in: validIds } }).lean();
-          const productMap = new Map(products.map((p) => [p._id.toString(), p]));
-
-          const results = topInteracted
-            .map((item) => {
-              const prod = productMap.get(item._id.toString());
-              if (!prod) return null;
-              return {
-                ...prod,
-                recommendationScore: 0.9,
-                recommendationReason: 'Trending popular choice among shoppers',
-                recommendationReasonType: 'cold_start_popular',
-                recommendationSource: 'popularity_weight',
-              };
-            })
-            .filter(Boolean);
-
-          if (results.length > 0) return results;
-        }
-      }
-    } catch (err) {
-      console.debug('Cold start interaction agg error:', err.message);
-    }
-  }
-
-  // Database catalog search
-  let fallback = [];
-  if (mongoose.connection.readyState === 1) {
-    try {
       const query = { stock: { $gt: 0 } };
-      if (excludedObjectIds.length > 0) {
-        query._id = { $nin: excludedObjectIds };
+      if (validExcludedObjectIds.length > 0) {
+        query._id = { $nin: validExcludedObjectIds };
       }
-      fallback = await Product.find(query)
+
+      dbProducts = await Product.find(query)
         .sort({ featured: -1, rating: -1, ratingCount: -1 })
-        .limit(limit)
+        .limit(limit * 2)
         .lean();
     } catch (err) {
-      // Fallthrough
+      console.warn('[Recommender Client] Cold start DB query warning:', err.message);
     }
   }
 
-  // Fallback to in-memory 219 seed dataset if database is empty/disconnected
-  if (!fallback || fallback.length === 0) {
-    let list = [...fallbackProducts];
-    if (excludeProductIds && excludeProductIds.length > 0) {
-      const exSet = new Set(excludeProductIds.map((i) => i.toString()));
-      list = list.filter((p) => !exSet.has(String(p._id)) && !exSet.has(String(p.id)));
-    }
-    list.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || (b.rating || 0) - (a.rating || 0));
-    fallback = list.slice(0, limit);
+  // Combine DB products with 219 fallback catalog items
+  let combined = [...fallbackProducts];
+  if (dbProducts && dbProducts.length > 0) {
+    combined = [...dbProducts, ...fallbackProducts];
   }
 
-  return fallback.map((p) => ({
+  // Deduplicate and filter out excluded products
+  const seen = new Set();
+  const filtered = [];
+  for (const p of combined) {
+    const pId = String(p._id || p.id || p.sku);
+    if (!seen.has(pId) && !exSet.has(pId) && !exSet.has(String(p.sku))) {
+      seen.add(pId);
+      filtered.push(p);
+    }
+  }
+
+  // Sort by rating & featured status
+  filtered.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || (b.rating || 0) - (a.rating || 0));
+
+  const finalItems = (filtered.length >= limit ? filtered : combined).slice(0, limit);
+
+  return finalItems.map((p) => ({
     ...p,
     recommendationScore: p.recommendationScore || 0.88,
     recommendationReason: p.recommendationReason || 'Top rated best seller in our store',

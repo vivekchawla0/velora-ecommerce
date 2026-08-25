@@ -13,46 +13,42 @@ const Interaction = require('../models/Interaction');
 // @access  Public (Optional Auth)
 const getRecommendations = async (req, res, next) => {
   try {
-    const userId = req.user ? req.user._id.toString() : 'guest';
+    const userId = req.user ? (req.user._id || req.user.id).toString() : 'guest';
     const limit = parseInt(req.query.limit, 10) || 8;
 
-    // Retrieve user's dismissed products & already interacted products
     let excludedProductIds = [];
     let interactedCount = 0;
-    if (req.user) {
-      // 1. Negative feedback
-      const feedbacks = await RecommendationFeedback.find({ userId: req.user._id });
-      const feedbackIds = feedbacks.map((f) => f.productId.toString());
+    if (req.user && mongoose.connection.readyState === 1) {
+      try {
+        const feedbacks = await RecommendationFeedback.find({
+          userId: req.user._id || req.user.id,
+          type: 'not_interested',
+        }).lean();
+        const feedbackIds = (feedbacks || []).map((f) => String(f.productId));
 
-      // 2. Already interacted items (view, click, wishlist, cart, purchase, rating)
-      const userInteractions = await Interaction.find({ userId: req.user._id }).select('productId');
-      const interactedIds = userInteractions
-        .filter((i) => i.productId)
-        .map((i) => i.productId.toString());
+        const purchases = await Interaction.find({
+          userId: req.user._id || req.user.id,
+          type: 'purchase',
+        }).select('productId').lean();
+        const purchasedIds = (purchases || []).map((p) => String(p.productId));
 
-      interactedCount = interactedIds.length;
-      excludedProductIds = Array.from(new Set([...feedbackIds, ...interactedIds]));
+        interactedCount = purchasedIds.length;
+        excludedProductIds = Array.from(new Set([...feedbackIds, ...purchasedIds]));
+      } catch (err) {
+        console.warn('[Recommender Controller] Exclusion lookup warning:', err.message);
+      }
     }
 
-    console.log(
-      `[Recommender Controller] userId: "${userId}" | interacted products: ${interactedCount} | excluded products: ${excludedProductIds.length}`
-    );
-
     const result = await getPersonalizedRecommendations(userId, limit, excludedProductIds);
-
-    const finalRecommendedIds = result.data.map((p) => (p._id ? p._id.toString() : p.productId));
-    console.log(
-      `[Recommender Controller] userId: "${userId}" | final recommended product IDs (${finalRecommendedIds.length}):`,
-      finalRecommendedIds
-    );
+    const recommendations = (result.data || []).slice(0, limit);
 
     res.status(200).json({
       success: true,
       userId,
-      source: result.source,
+      source: result.source || 'cold_start_popular',
       reason: result.reason || (req.user ? 'Recommended based on your recent activity' : 'Top trending bestseller across all shoppers'),
-      count: result.data.length,
-      recommendations: result.data,
+      count: recommendations.length,
+      recommendations,
     });
   } catch (error) {
     next(error);
