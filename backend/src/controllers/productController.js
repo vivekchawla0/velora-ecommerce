@@ -96,7 +96,7 @@ const getProducts = async (req, res, next) => {
         const skip = (pageNum - 1) * limitNum;
 
         [products, total] = await Promise.all([
-          Product.find(query).sort(sortOption).skip(skip).limit(limitNum).lean(),
+          Product.find(query).select('-description -reviews -specifications').sort(sortOption).skip(skip).limit(limitNum).lean(),
           Product.countDocuments(query),
         ]);
       } catch (dbErr) {

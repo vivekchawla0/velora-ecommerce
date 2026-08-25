@@ -61,7 +61,7 @@ const getProductBackground = (category, id = '') => {
   return EDITORIAL_PALETTE[hash] || EDITORIAL_PALETTE[0];
 };
 
-export const ProductCard = ({
+const ProductCardComponent = ({
   product,
   showRecommendationBadge = false,
   onDismiss = null,
@@ -569,4 +569,5 @@ export const ProductCard = ({
   );
 };
 
+export const ProductCard = React.memo(ProductCardComponent);
 export default ProductCard;
