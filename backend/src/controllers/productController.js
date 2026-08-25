@@ -88,6 +88,7 @@ const getProducts = async (req, res, next) => {
       success: true,
       count: products.length,
       total,
+      totalProducts: total,
       page: pageNum,
       totalPages,
       hasMore: pageNum < totalPages,
@@ -132,11 +133,16 @@ const getCategories = async (req, res, next) => {
       { $group: { _id: '$category', count: { $sum: 1 } } },
     ]);
 
-    const countMap = new Map(counts.map((c) => [c._id.toLowerCase(), c.count]));
+    const countMap = new Map(
+      counts.map((c) => [c._id ? String(c._id).toLowerCase() : '', c.count])
+    );
 
     const enrichedCategories = categories.map((cat) => ({
       ...cat,
-      productCount: countMap.get(cat.name.toLowerCase()) || countMap.get(cat.slug.toLowerCase()) || 0,
+      productCount:
+        countMap.get(cat.slug.toLowerCase()) ||
+        countMap.get(cat.name.toLowerCase()) ||
+        0,
     }));
 
     res.status(200).json({

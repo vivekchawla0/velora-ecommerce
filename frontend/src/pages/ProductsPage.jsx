@@ -64,7 +64,7 @@ export const ProductsPage = () => {
 
         const res = await api.get('/products', { params });
         if (res.data) {
-          const raw = res.data.products || [];
+          const raw = res.data.products || res.data.data || [];
           // Deduplicate products by _id
           const seen = new Set();
           const deduped = raw.filter((p) => {
@@ -75,7 +75,7 @@ export const ProductsPage = () => {
           });
 
           setProducts(deduped);
-          setTotalProducts(res.data.totalProducts || 0);
+          setTotalProducts(res.data.total ?? res.data.totalProducts ?? res.data.count ?? deduped.length ?? 0);
           setTotalPages(res.data.totalPages || 1);
         }
       } catch (err) {
