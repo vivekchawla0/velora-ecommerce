@@ -93,7 +93,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const loginAsAdmin = () => {
-    return login('admin@example.com', 'Admin123!');
+    return login('vishu@gmail.com', '2580');
   };
 
   return (

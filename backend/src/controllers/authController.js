@@ -78,11 +78,11 @@ const demoShopperObj = {
   lastActivityAt: new Date().toISOString(),
 };
 
-const demoAdminObj = {
+const vishuAdminObj = {
   _id: '660000000000000000000002',
   id: '660000000000000000000002',
-  name: 'Velora Administrator',
-  email: 'admin@example.com',
+  name: 'Vishu (Admin)',
+  email: 'vishu@gmail.com',
   role: 'admin',
   status: 'active',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
@@ -107,24 +107,69 @@ const loginUser = async (req, res, next) => {
 
     const normalizedEmail = email.toLowerCase().trim();
     const isDemoShopper = normalizedEmail === 'demo@example.com';
-    const isDemoAdmin = normalizedEmail === 'admin@example.com';
+    const isVishuAdmin = normalizedEmail === 'vishu@gmail.com';
+    const isLegacyAdmin = normalizedEmail === 'admin@example.com';
 
-    // Immediate 1-Click Demo Shortcut Failsafe
-    if ((isDemoShopper || isDemoAdmin) && (password === 'password123' || password === 'Demo123!' || password === 'Admin123!')) {
-      let userObj = isDemoAdmin ? demoAdminObj : demoShopperObj;
+    // 1. Vishu Admin Login Failsafe (vishu@gmail.com / 2580 or Admin123!)
+    if ((isVishuAdmin || isLegacyAdmin) && (password === '2580' || password === 'Admin123!' || password === 'password123')) {
+      let userObj = vishuAdminObj;
 
       if (mongoose.connection.readyState === 1) {
         try {
-          let dbUser = await User.findOne({ email: normalizedEmail }).select('+password');
+          let dbUser = await User.findOne({ email: 'vishu@gmail.com' }).select('+password');
           if (!dbUser) {
             dbUser = await User.create({
-              name: userObj.name,
-              email: userObj.email,
-              password: isDemoAdmin ? 'Admin123!' : 'Demo123!',
-              role: userObj.role,
+              name: 'Vishu (Admin)',
+              email: 'vishu@gmail.com',
+              password: '2580',
+              role: 'admin',
               status: 'active',
-              avatar: userObj.avatar,
-              preferences: userObj.preferences,
+              avatar: vishuAdminObj.avatar,
+              preferences: vishuAdminObj.preferences,
+            });
+          }
+          if (dbUser) {
+            userObj = {
+              id: dbUser._id,
+              _id: dbUser._id,
+              name: dbUser.name,
+              email: dbUser.email,
+              role: dbUser.role,
+              status: dbUser.status,
+              avatar: dbUser.avatar,
+              preferences: dbUser.preferences,
+            };
+          }
+        } catch (dbErr) {
+          console.warn('[Auth Controller] Vishu Admin DB query warning:', dbErr.message);
+        }
+      }
+
+      const token = generateToken(userObj._id);
+      return res.status(200).json({
+        success: true,
+        message: 'Logged in as Admin successfully.',
+        token,
+        user: userObj,
+      });
+    }
+
+    // 2. Demo Shopper Failsafe (demo@example.com / Demo123!)
+    if (isDemoShopper && (password === 'Demo123!' || password === 'password123')) {
+      let userObj = demoShopperObj;
+
+      if (mongoose.connection.readyState === 1) {
+        try {
+          let dbUser = await User.findOne({ email: 'demo@example.com' }).select('+password');
+          if (!dbUser) {
+            dbUser = await User.create({
+              name: 'Alex Morgan',
+              email: 'demo@example.com',
+              password: 'Demo123!',
+              role: 'user',
+              status: 'active',
+              avatar: demoShopperObj.avatar,
+              preferences: demoShopperObj.preferences,
             });
           }
           if (dbUser) {
@@ -233,8 +278,8 @@ const getMe = async (req, res, next) => {
       if (uId === '660000000000000000000001' || req.user.email === 'demo@example.com') {
         return res.status(200).json({ success: true, user: demoShopperObj });
       }
-      if (uId === '660000000000000000000002' || req.user.email === 'admin@example.com') {
-        return res.status(200).json({ success: true, user: demoAdminObj });
+      if (uId === '660000000000000000000002' || req.user.email === 'vishu@gmail.com' || req.user.email === 'admin@example.com') {
+        return res.status(200).json({ success: true, user: vishuAdminObj });
       }
       return res.status(401).json({ success: false, message: 'User not found.' });
     }
