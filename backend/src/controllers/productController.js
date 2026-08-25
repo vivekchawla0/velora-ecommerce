@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
 const { productsData, categoriesData } = require('../scripts/seed');
@@ -42,63 +43,65 @@ const getProducts = async (req, res, next) => {
     let products = [];
     let total = 0;
 
-    // 1. Try DB Query
-    try {
-      const query = {};
+    // 1. Try DB Query ONLY if Mongoose is connected (readyState === 1)
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const query = {};
 
-      if (q) {
-        query.$or = [
-          { name: { $regex: q, $options: 'i' } },
-          { description: { $regex: q, $options: 'i' } },
-          { brand: { $regex: q, $options: 'i' } },
-          { tags: { $in: [new RegExp(q, 'i')] } },
-        ];
+        if (q) {
+          query.$or = [
+            { name: { $regex: q, $options: 'i' } },
+            { description: { $regex: q, $options: 'i' } },
+            { brand: { $regex: q, $options: 'i' } },
+            { tags: { $in: [new RegExp(q, 'i')] } },
+          ];
+        }
+
+        if (category && category !== 'all') {
+          query.category = { $regex: new RegExp(`^${category}$`, 'i') };
+        }
+
+        if (brand && brand !== 'all') {
+          query.brand = { $regex: new RegExp(`^${brand}$`, 'i') };
+        }
+
+        if (minPrice !== undefined || maxPrice !== undefined) {
+          query.price = {};
+          if (minPrice !== undefined && minPrice !== '') query.price.$gte = Number(minPrice);
+          if (maxPrice !== undefined && maxPrice !== '') query.price.$lte = Number(maxPrice);
+          if (Object.keys(query.price).length === 0) delete query.price;
+        }
+
+        if (minRating) {
+          query.rating = { $gte: Number(minRating) };
+        }
+
+        if (inStock === 'true') {
+          query.stock = { $gt: 0 };
+        }
+
+        if (featured === 'true') {
+          query.featured = true;
+        }
+
+        let sortOption = { createdAt: -1 };
+        if (sort === 'price_asc') sortOption = { price: 1 };
+        else if (sort === 'price_desc') sortOption = { price: -1 };
+        else if (sort === 'rating') sortOption = { rating: -1, ratingCount: -1 };
+        else if (sort === 'discount') sortOption = { discountPercentage: -1 };
+        else if (sort === 'popular') sortOption = { ratingCount: -1, rating: -1 };
+
+        const pageNum = parseInt(page, 10) || 1;
+        const limitNum = parseInt(limit, 10) || 12;
+        const skip = (pageNum - 1) * limitNum;
+
+        [products, total] = await Promise.all([
+          Product.find(query).sort(sortOption).skip(skip).limit(limitNum).lean(),
+          Product.countDocuments(query),
+        ]);
+      } catch (dbErr) {
+        console.warn('[Product Controller] DB Query Failed, using seed fallback:', dbErr.message);
       }
-
-      if (category && category !== 'all') {
-        query.category = { $regex: new RegExp(`^${category}$`, 'i') };
-      }
-
-      if (brand && brand !== 'all') {
-        query.brand = { $regex: new RegExp(`^${brand}$`, 'i') };
-      }
-
-      if (minPrice !== undefined || maxPrice !== undefined) {
-        query.price = {};
-        if (minPrice !== undefined && minPrice !== '') query.price.$gte = Number(minPrice);
-        if (maxPrice !== undefined && maxPrice !== '') query.price.$lte = Number(maxPrice);
-        if (Object.keys(query.price).length === 0) delete query.price;
-      }
-
-      if (minRating) {
-        query.rating = { $gte: Number(minRating) };
-      }
-
-      if (inStock === 'true') {
-        query.stock = { $gt: 0 };
-      }
-
-      if (featured === 'true') {
-        query.featured = true;
-      }
-
-      let sortOption = { createdAt: -1 };
-      if (sort === 'price_asc') sortOption = { price: 1 };
-      else if (sort === 'price_desc') sortOption = { price: -1 };
-      else if (sort === 'rating') sortOption = { rating: -1, ratingCount: -1 };
-      else if (sort === 'discount') sortOption = { discountPercentage: -1 };
-      else if (sort === 'popular') sortOption = { ratingCount: -1, rating: -1 };
-
-      const pageNum = parseInt(page, 10) || 1;
-      const limitNum = parseInt(limit, 10) || 12;
-      const skip = (pageNum - 1) * limitNum;
-
-      [products, total] = await Promise.all([
-        Product.find(query).sort(sortOption).skip(skip).limit(limitNum).lean(),
-        Product.countDocuments(query),
-      ]);
-    } catch (dbErr) {
-      console.warn('[Product Controller] DB Query Failed, using seed fallback:', dbErr.message);
     }
 
     // 2. If DB query returned 0 products (or DB error occurred), query fallback dataset in memory

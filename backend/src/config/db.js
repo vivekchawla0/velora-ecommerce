@@ -8,6 +8,7 @@ let mongoMemoryServer = null;
  * In automated test suites (NODE_ENV === 'test'), falls back to MongoMemoryServer if needed.
  */
 const connectDB = async () => {
+  mongoose.set('bufferCommands', false);
   if (mongoose.connection.readyState >= 1) {
     return mongoose.connection;
   }
