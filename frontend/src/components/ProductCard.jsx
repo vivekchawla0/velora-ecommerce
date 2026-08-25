@@ -79,8 +79,8 @@ export const ProductCard = ({
   if (!product || isDismissed) return null;
 
   const pId = (product._id || product.id || '').toString();
-  const wishlisted = isInWishlist(pId);
-  const isAdded = isInCart(pId);
+  const wishlisted = isInWishlist(product);
+  const isAdded = isInCart(product);
 
   const handleCardClick = () => {
     trackClick(pId);

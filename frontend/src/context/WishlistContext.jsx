@@ -49,10 +49,32 @@ export const WishlistProvider = ({ children }) => {
     }
   }, [wishlist]);
 
-  const isInWishlist = (productId) => {
-    if (!productId) return false;
-    return wishlist.some((item) => (item._id || item.id || item) === (productId._id || productId.id || productId));
-  };
+  const isInWishlist = useCallback(
+    (productOrId) => {
+      if (!productOrId) return false;
+      const targetIds = new Set();
+
+      if (typeof productOrId === 'object') {
+        if (productOrId._id) targetIds.add(String(productOrId._id));
+        if (productOrId.id) targetIds.add(String(productOrId.id));
+        if (productOrId.sku) targetIds.add(String(productOrId.sku));
+      } else {
+        targetIds.add(String(productOrId));
+      }
+
+      return wishlist.some((item) => {
+        const itemIds = [
+          item?._id ? String(item._id) : null,
+          item?.id ? String(item.id) : null,
+          item?.sku ? String(item.sku) : null,
+          typeof item === 'string' ? item : null,
+        ].filter(Boolean);
+
+        return itemIds.some((id) => targetIds.has(id));
+      });
+    },
+    [wishlist]
+  );
 
   const toggleWishlist = async (product) => {
     if (!product) return;

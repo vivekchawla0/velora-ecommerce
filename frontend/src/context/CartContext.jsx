@@ -228,12 +228,30 @@ export const CartProvider = ({ children }) => {
 
   // Check if product exists in cart
   const isInCart = useCallback(
-    (productId) => {
-      if (!productId) return false;
-      const targetId = productId.toString();
+    (productOrId) => {
+      if (!productOrId) return false;
+      const targetIds = new Set();
+
+      if (typeof productOrId === 'object') {
+        if (productOrId._id) targetIds.add(String(productOrId._id));
+        if (productOrId.id) targetIds.add(String(productOrId.id));
+        if (productOrId.sku) targetIds.add(String(productOrId.sku));
+        if (productOrId.productId) targetIds.add(String(productOrId.productId));
+      } else {
+        targetIds.add(String(productOrId));
+      }
+
       return cart.some((item) => {
-        const id = item.product?._id || item.product?.id || item.product || item.productId;
-        return id && id.toString() === targetId;
+        const itemProd = item.product;
+        const itemIds = [
+          item.productId ? String(item.productId) : null,
+          itemProd?._id ? String(itemProd._id) : null,
+          itemProd?.id ? String(itemProd.id) : null,
+          itemProd?.sku ? String(itemProd.sku) : null,
+          typeof itemProd === 'string' ? itemProd : null,
+        ].filter(Boolean);
+
+        return itemIds.some((id) => targetIds.has(id));
       });
     },
     [cart]
