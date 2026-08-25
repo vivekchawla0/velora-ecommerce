@@ -6,7 +6,7 @@ const { productsData } = require('../scripts/seed');
 
 const RECOMMENDATION_SERVICE_URL =
   process.env.RECOMMENDATION_SERVICE_URL || 'http://localhost:8000';
-const TIMEOUT_MS = 2000; // 2-second timeout for ML microservice requests
+const TIMEOUT_MS = 300; // 300ms fast-fail timeout for ML microservice requests on serverless
 
 // Format fallback products dataset with IDs and default timestamps
 const fallbackProducts = (productsData || []).map((p, idx) => ({

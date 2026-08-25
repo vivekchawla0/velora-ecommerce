@@ -33,18 +33,46 @@ export const ForYouPage = () => {
 
     try {
       // 1. Fetch Main Personalized Recommendations
-      const recRes = await api.get('/recommendations', { params: { limit: 12 } });
-      if (recRes.data) {
-        setRecommendations(recRes.data.recommendations || []);
-        setStrategy(recRes.data.source || 'collaborative_filtering');
-        setReason(recRes.data.reason || '');
+      let recs = [];
+      let recSource = 'collaborative_filtering';
+      let recReason = '';
+
+      try {
+        const recRes = await api.get('/recommendations', { params: { limit: 12 } });
+        if (recRes.data?.recommendations && Array.isArray(recRes.data.recommendations) && recRes.data.recommendations.length > 0) {
+          recs = recRes.data.recommendations;
+          recSource = recRes.data.source || 'collaborative_filtering';
+          recReason = recRes.data.reason || '';
+        }
+      } catch (e) {}
+
+      // Secondary failsafe: if recommendations returned 0 items, fetch catalog products
+      if (!recs || recs.length === 0) {
+        try {
+          const catRes = await api.get('/products', { params: { limit: 12, sort: 'popular' } });
+          if (catRes.data?.products && Array.isArray(catRes.data.products)) {
+            recs = catRes.data.products.map((p) => ({
+              ...p,
+              recommendationScore: p.recommendationScore || 0.88,
+              recommendationReason: p.recommendationReason || 'Popular bestseller across Velora',
+            }));
+            recSource = 'cold_start_popular';
+            recReason = 'Top trending bestseller across all shoppers';
+          }
+        } catch (e) {}
       }
 
+      setRecommendations(recs);
+      setStrategy(recSource);
+      setReason(recReason);
+
       // 2. Fetch Trending / Popular Bestsellers
-      const trendRes = await api.get('/products', { params: { sort: 'popular', limit: 8 } });
-      if (trendRes.data?.products) {
-        setTrendingProducts(trendRes.data.products);
-      }
+      try {
+        const trendRes = await api.get('/products', { params: { sort: 'popular', limit: 8 } });
+        if (trendRes.data?.products) {
+          setTrendingProducts(trendRes.data.products);
+        }
+      } catch (e) {}
 
       // 3. Fetch User Interaction History & Stats if authenticated
       if (isAuthenticated) {
