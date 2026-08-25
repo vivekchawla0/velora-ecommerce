@@ -866,90 +866,103 @@ input, select, textarea {
 .btn-add-cart,
 .btn-added-cart {
   flex-shrink: 0;
-}
-
-@media (max-width: 640px) {
+}@media (max-width: 640px) {
+  .carousel-item {
+    flex: 0 0 220px;
+  }
   .product-card {
     border-radius: 14px !important;
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0 !important;
     box-sizing: border-box !important;
+    overflow: hidden !important;
   }
   .product-card-image-wrap {
     aspect-ratio: 1 / 1 !important;
     height: auto !important;
-    max-height: none !important;
-    padding: 1.5rem !important;
+    padding: 1.25rem !important;
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0 !important;
     box-sizing: border-box !important;
   }
   .product-card-image {
-    max-height: 220px !important;
-    max-width: 80% !important;
+    max-height: 200px !important;
+    max-width: 85% !important;
     width: auto !important;
     height: auto !important;
     object-fit: contain !important;
   }
   .product-card-body {
-    padding: 1.15rem 1.25rem 1.25rem !important;
+    padding: 0.75rem 0.75rem 0.85rem !important;
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0 !important;
     box-sizing: border-box !important;
   }
   .product-card-brand {
-    font-size: 0.7rem !important;
-    margin-bottom: 0.25rem !important;
-    letter-spacing: 0.06em !important;
+    font-size: 0.68rem !important;
+    margin-bottom: 0.2rem !important;
+    letter-spacing: 0.05em !important;
   }
   .product-card-title {
-    font-size: 0.935rem !important;
-    line-height: 1.38 !important;
-    min-height: 2.6rem !important;
+    font-size: 0.88rem !important;
+    line-height: 1.35 !important;
+    min-height: 2.4rem !important;
     max-height: none !important;
-    margin-bottom: 0.45rem !important;
+    margin-bottom: 0.4rem !important;
     word-break: break-word !important;
     overflow-wrap: break-word !important;
   }
   .product-card-rating-wrap {
-    margin-bottom: 0.75rem !important;
-    gap: 0.35rem !important;
-    font-size: 0.825rem !important;
+    margin-bottom: 0.5rem !important;
+    gap: 0.3rem !important;
+    font-size: 0.78rem !important;
   }
   .product-card-footer {
-    padding-top: 0.75rem !important;
-    gap: 0.5rem !important;
+    display: flex !important;
+    align-items: flex-end !important;
+    justify-content: space-between !important;
+    padding-top: 0.5rem !important;
+    gap: 0.3rem !important;
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0 !important;
     box-sizing: border-box !important;
   }
   .product-card-price-wrap {
-    min-height: 2.4rem !important;
+    min-height: 2.2rem !important;
+    min-width: 0 !important;
+    flex: 0 1 auto !important;
+    overflow: visible !important;
   }
   .product-card-price-wrap .price-current,
   .product-card-price-current {
-    font-size: 1.15rem !important;
+    font-size: 0.98rem !important;
+    line-height: 1.1 !important;
+    font-weight: 800 !important;
+    white-space: nowrap !important;
   }
   .product-card-price-original {
-    font-size: 0.75rem !important;
+    font-size: 0.70rem !important;
+    margin-bottom: 1px !important;
+    white-space: nowrap !important;
   }
   .btn-add-cart,
   .btn-added-cart {
-    padding: 0.45rem 0.95rem !important;
-    font-size: 0.825rem !important;
-    height: 36px !important;
-    gap: 0.35rem !important;
+    padding: 0.38rem 0.6rem !important;
+    font-size: 0.76rem !important;
+    height: 32px !important;
+    gap: 0.3rem !important;
     flex-shrink: 0 !important;
+    border-radius: 8px !important;
+    box-sizing: border-box !important;
   }
   .product-card-wishlist-btn {
-    top: 0.75rem !important;
-    right: 0.75rem !important;
-    width: 32px !important;
-    height: 32px !important;
+    top: 0.6rem !important;
+    right: 0.6rem !important;
+    width: 30px !important;
   }
   .badge-discount {
     top: 0.75rem !important;
