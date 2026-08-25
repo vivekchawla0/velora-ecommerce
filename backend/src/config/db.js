@@ -12,27 +12,43 @@ const connectDB = async () => {
     return mongoose.connection;
   }
   try {
-    const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/velora';
+    const mongoUri = process.env.MONGO_URI;
     
-    // Attempt connecting to configured MongoDB URI
+    // 1. If MONGO_URI is set (e.g. MongoDB Atlas), connect directly
+    if (mongoUri) {
+      try {
+        const conn = await mongoose.connect(mongoUri, {
+          serverSelectionTimeoutMS: 5000,
+        });
+        console.log(`[Database] MongoDB Connected: ${conn.connection.host} (${conn.connection.name})`);
+        return conn;
+      } catch (atlasErr) {
+        console.error(`[Database Error] Failed connecting to MONGO_URI: ${atlasErr.message}`);
+      }
+    }
+
+    // 2. Attempt connecting to local MongoDB URI
+    const localUri = process.env.LOCAL_MONGO_URI || 'mongodb://127.0.0.1:27017/velora';
     try {
-      const conn = await mongoose.connect(mongoUri, {
-        serverSelectionTimeoutMS: 3000,
+      const conn = await mongoose.connect(localUri, {
+        serverSelectionTimeoutMS: 2000,
       });
-      console.log(`[Database] MongoDB Connected: ${conn.connection.host} (${conn.connection.name})`);
+      console.log(`[Database] Local MongoDB Connected: ${conn.connection.host} (${conn.connection.name})`);
       return conn;
     } catch (primaryErr) {
-      console.log(`[Database] Local MongoDB not detected at ${mongoUri}. Starting In-Memory MongoDB Server...`);
+      console.log(`[Database] Local MongoDB not detected. Starting In-Memory MongoDB Server...`);
       const { MongoMemoryServer } = require('mongodb-memory-server');
-      mongoMemoryServer = await MongoMemoryServer.create();
+      mongoMemoryServer = await MongoMemoryServer.create({
+        downloadDir: process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME ? '/tmp' : undefined,
+      });
       const memoryUri = mongoMemoryServer.getUri();
       const conn = await mongoose.connect(memoryUri);
       console.log(`[Database] In-Memory MongoDB running at: ${memoryUri}`);
       return conn;
     }
   } catch (error) {
-    console.error(`[Database Error] Fatal startup connection error: ${error.message}`);
-    process.exit(1);
+    console.error(`[Database Error] Connection error: ${error.message}`);
+    throw error;
   }
 };
 
