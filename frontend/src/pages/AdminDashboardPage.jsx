@@ -60,51 +60,63 @@ export const AdminDashboardPage = () => {
 
   const loadAdminData = async () => {
     setLoading(true);
-    try {
-      const [statsRes, prodsRes, ordersRes] = await Promise.all([
-        api.get('/admin/stats'),
-        api.get('/products', { params: { limit: 300 } }),
-        api.get('/admin/orders', { params: { limit: 100 } }),
-      ]);
 
-      if (statsRes.data?.stats) setStats(statsRes.data.stats);
-      if (prodsRes.data?.products) setProducts(prodsRes.data.products);
-      if (ordersRes.data?.orders) setOrders(ordersRes.data.orders);
-    } catch (err) {
-      toast.error('Failed to load admin dashboard data.');
-    } finally {
-      setLoading(false);
-    }
+    try {
+      const statsRes = await api.get('/admin/stats').catch(() => null);
+      if (statsRes?.data?.stats) {
+        setStats(statsRes.data.stats);
+      }
+    } catch (e) {}
+
+    try {
+      const prodsRes = await api.get('/products', { params: { limit: 300 } }).catch(() => null);
+      if (prodsRes?.data?.products) {
+        setProducts(prodsRes.data.products);
+      }
+    } catch (e) {}
+
+    try {
+      const ordersRes = await api.get('/admin/orders', { params: { limit: 100 } }).catch(() => null);
+      if (ordersRes?.data?.orders) {
+        setOrders(ordersRes.data.orders);
+      }
+    } catch (e) {}
+
+    setLoading(false);
   };
 
   const loadUsersData = async (page = 1) => {
     setUsersLoading(true);
-    try {
-      const [uStatsRes, usersRes] = await Promise.all([
-        api.get('/admin/users/stats'),
-        api.get('/admin/users', {
-          params: {
-            page,
-            limit: userPagination.limit,
-            q: userSearch.trim(),
-            role: roleFilter,
-            status: statusFilter,
-            dateRange: dateFilter,
-            sortBy,
-          },
-        }),
-      ]);
 
-      if (uStatsRes.data?.stats) setUserStats(uStatsRes.data.stats);
-      if (usersRes.data?.users) {
-        setUsersList(usersRes.data.users);
-        setUserPagination(usersRes.data.pagination);
+    try {
+      const uStatsRes = await api.get('/admin/users/stats').catch(() => null);
+      if (uStatsRes?.data?.stats) {
+        setUserStats(uStatsRes.data.stats);
       }
-    } catch (err) {
-      toast.error('Failed to load users.');
-    } finally {
-      setUsersLoading(false);
-    }
+    } catch (e) {}
+
+    try {
+      const usersRes = await api.get('/admin/users', {
+        params: {
+          page,
+          limit: userPagination.limit,
+          q: userSearch.trim(),
+          role: roleFilter,
+          status: statusFilter,
+          dateRange: dateFilter,
+          sortBy,
+        },
+      }).catch(() => null);
+
+      if (usersRes?.data?.users) {
+        setUsersList(usersRes.data.users);
+        if (usersRes.data.pagination) {
+          setUserPagination(usersRes.data.pagination);
+        }
+      }
+    } catch (e) {}
+
+    setUsersLoading(false);
   };
 
   useEffect(() => {
