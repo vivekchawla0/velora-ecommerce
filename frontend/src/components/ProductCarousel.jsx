@@ -23,14 +23,15 @@ export const ProductCarousel = ({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
 
-  // Deduplicate products by _id before displaying
+  // Deduplicate products by _id / id / sku before displaying
   const uniqueProducts = React.useMemo(() => {
     if (!products || !Array.isArray(products)) return [];
     const seen = new Set();
     return products.filter((p) => {
-      const id = p._id || p.id;
-      if (!id || seen.has(id)) return false;
-      seen.add(id);
+      if (!p) return false;
+      const id = p._id || p.id || p.sku || (typeof p.productId === 'object' ? (p.productId?._id || p.productId?.id) : p.productId) || p.name;
+      if (!id || seen.has(String(id))) return false;
+      seen.add(String(id));
       return true;
     });
   }, [products]);
@@ -146,8 +147,8 @@ export const ProductCarousel = ({
               {emptyMessage}
             </div>
           ) : (
-            uniqueProducts.map((prod) => (
-              <div key={prod._id || prod.id} className="carousel-item">
+            uniqueProducts.map((prod, idx) => (
+              <div key={prod._id || prod.id || prod.sku || idx} className="carousel-item">
                 <ProductCard
                   product={prod}
                   showRecommendationBadge={showRecommendationBadge}

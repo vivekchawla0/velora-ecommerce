@@ -61,12 +61,18 @@ export const ForYouPage = () => {
             const lastViewed = historyRes.data.history.find((h) => h.productId);
             if (lastViewed && lastViewed.productId) {
               try {
-                const simRes = await api.get(`/recommendations/similar/${lastViewed.productId._id || lastViewed.productId}`, { params: { limit: 8 } });
-                if (simRes.data?.recommendations && simRes.data.recommendations.length > 0) {
-                  setBecauseYouViewed({
-                    baseProduct: lastViewed.productId,
-                    products: simRes.data.recommendations,
-                  });
+                const targetPId = typeof lastViewed.productId === 'object'
+                  ? (lastViewed.productId._id || lastViewed.productId.id || lastViewed.productId.sku)
+                  : lastViewed.productId;
+
+                if (targetPId) {
+                  const simRes = await api.get(`/recommendations/similar/${targetPId}`, { params: { limit: 8 } });
+                  if (simRes.data?.recommendations && simRes.data.recommendations.length > 0) {
+                    setBecauseYouViewed({
+                      baseProduct: lastViewed.productId,
+                      products: simRes.data.recommendations,
+                    });
+                  }
                 }
               } catch (simErr) {
                 console.debug('Similar items load error:', simErr.message);
