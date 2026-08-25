@@ -11,23 +11,23 @@ const { productsData } = require('../scripts/seed');
 // @access  Private/Admin
 const getAdminStats = async (req, res, next) => {
   try {
-    let totalUsers = 124;
-    let totalProducts = 219;
-    let totalOrders = 48;
-    let totalRevenue = 15840.50;
+    let totalUsers = 0;
+    let totalProducts = 0;
+    let totalOrders = 0;
+    let totalRevenue = 0;
     let mostViewedProducts = [];
     let mostPurchasedProducts = [];
     let mostDismissedProducts = [];
     let recentOrders = [];
     let statusCounts = {
-      Processing: 12,
-      Confirmed: 18,
-      Shipped: 10,
-      Delivered: 8,
+      Processing: 0,
+      Confirmed: 0,
+      Shipped: 0,
+      Delivered: 0,
       Cancelled: 0,
     };
-    let recImpressionsCount = 1420;
-    let recClicksCount = 218;
+    let recImpressionsCount = 0;
+    let recClicksCount = 0;
 
     if (mongoose.connection.readyState === 1) {
       try {
@@ -44,7 +44,7 @@ const getAdminStats = async (req, res, next) => {
           dbViews,
           dismissedAgg,
         ] = await Promise.all([
-          User.countDocuments({ role: 'user' }),
+          User.countDocuments({ status: { $ne: 'deleted' } }),
           Product.countDocuments(),
           Order.countDocuments(),
           Order.aggregate([
@@ -81,13 +81,13 @@ const getAdminStats = async (req, res, next) => {
           ]),
         ]);
 
-        if (dbProds > 0) totalProducts = dbProds;
-        if (dbUsers > 0) totalUsers = dbUsers;
-        if (dbOrders > 0) totalOrders = dbOrders;
+        totalUsers = dbUsers;
+        totalProducts = dbProds;
+        totalOrders = dbOrders;
         if (revenueResult.length > 0) totalRevenue = revenueResult[0].totalRevenue;
-        if (dbRecentOrders.length > 0) recentOrders = dbRecentOrders;
-        if (dbClicks > 0) recClicksCount = dbClicks;
-        if (dbViews > 0) recImpressionsCount = dbViews;
+        recentOrders = dbRecentOrders;
+        recClicksCount = dbClicks;
+        recImpressionsCount = dbViews;
 
         // Populate top viewed product details
         const viewedIds = topViewedAgg.map((v) => v._id);
@@ -119,16 +119,21 @@ const getAdminStats = async (req, res, next) => {
       } catch (dbErr) {
         console.warn('[Admin Controller] DB Query warning:', dbErr.message);
       }
+    } else {
+      totalProducts = (productsData || []).length;
+      totalUsers = 2;
+      totalOrders = 0;
+      totalRevenue = 0;
     }
 
-    if (mostViewedProducts.length === 0) {
+    if (mostViewedProducts.length === 0 && productsData && productsData.length > 0) {
       mostViewedProducts = (productsData || []).slice(0, 5).map((p, idx) => ({
         product: p,
         views: 240 - idx * 32,
       }));
     }
 
-    if (mostPurchasedProducts.length === 0) {
+    if (mostPurchasedProducts.length === 0 && productsData && productsData.length > 0) {
       mostPurchasedProducts = (productsData || []).slice(5, 10).map((p, idx) => ({
         product: p,
         purchases: 85 - idx * 12,
@@ -138,7 +143,7 @@ const getAdminStats = async (req, res, next) => {
     const calculatedCTR =
       recImpressionsCount > 0
         ? Number(((recClicksCount / recImpressionsCount) * 100).toFixed(1))
-        : 15.4;
+        : 0.0;
 
     res.status(200).json({
       success: true,
@@ -147,7 +152,7 @@ const getAdminStats = async (req, res, next) => {
         totalProducts,
         totalOrders,
         totalRevenue: Number(totalRevenue.toFixed(2)),
-        conversionRate: totalUsers > 0 ? Number(((totalOrders / totalUsers) * 100).toFixed(1)) : 14.2,
+        conversionRate: totalUsers > 0 ? Number(((totalOrders / totalUsers) * 100).toFixed(1)) : 0,
         statusCounts,
         mostViewedProducts,
         mostPurchasedProducts,
@@ -157,7 +162,7 @@ const getAdminStats = async (req, res, next) => {
           impressions: recImpressionsCount,
           clicks: recClicksCount,
           ctr: calculatedCTR,
-          totalDismissals: 4,
+          totalDismissals: 0,
         },
       },
     });

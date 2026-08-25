@@ -63,8 +63,8 @@ export const AdminDashboardPage = () => {
     try {
       const [statsRes, prodsRes, ordersRes] = await Promise.all([
         api.get('/admin/stats'),
-        api.get('/products', { params: { limit: 50 } }),
-        api.get('/admin/orders', { params: { limit: 30 } }),
+        api.get('/products', { params: { limit: 300 } }),
+        api.get('/admin/orders', { params: { limit: 100 } }),
       ]);
 
       if (statsRes.data?.stats) setStats(statsRes.data.stats);
