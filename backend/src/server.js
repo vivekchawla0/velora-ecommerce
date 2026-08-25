@@ -8,6 +8,7 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 const app = require('./app');
 const { connectDB } = require('./config/db');
 const Product = require('./models/Product');
+const User = require('./models/User');
 const { runSeed } = require('./scripts/seed');
 const { syncInteractionsWithML } = require('./services/recommendationClient');
 
@@ -18,10 +19,11 @@ const startServer = async () => {
     // 1. Connect to MongoDB
     await connectDB();
 
-    // 2. Auto-seed if database is empty
+    // 2. Auto-seed if database is empty or core users missing
+    const userCount = await User.countDocuments();
     const productCount = await Product.countDocuments();
-    if (productCount === 0) {
-      console.log('[Server] Database is empty. Running automatic seed data generator...');
+    if (productCount === 0 || userCount === 0) {
+      console.log('[Server] Database or seed users missing. Running automatic seed data generator...');
       await runSeed({ silent: true });
     }
 

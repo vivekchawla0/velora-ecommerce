@@ -8,6 +8,9 @@ let mongoMemoryServer = null;
  * In automated test suites (NODE_ENV === 'test'), falls back to MongoMemoryServer if needed.
  */
 const connectDB = async () => {
+  if (mongoose.connection.readyState >= 1) {
+    return mongoose.connection;
+  }
   try {
     const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/velora';
     

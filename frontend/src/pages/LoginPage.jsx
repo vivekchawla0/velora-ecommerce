@@ -113,7 +113,7 @@ export const LoginPage = () => {
           <div className="input-group">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
               <label className="input-label" style={{ marginBottom: 0 }}>Password</label>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>demo: password123</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>demo: Demo123! | admin: Admin123!</span>
             </div>
             <div style={{ position: 'relative' }}>
               <Lock size={15} color="var(--text-muted)" style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)' }} />
