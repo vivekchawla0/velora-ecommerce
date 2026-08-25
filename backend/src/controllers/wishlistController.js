@@ -2,29 +2,32 @@ const Wishlist = require('../models/Wishlist');
 const Product = require('../models/Product');
 const { recordInteraction } = require('../services/interactionService');
 
+const mongoose = require('mongoose');
+const { productsData } = require('../scripts/seed');
+
+const fallbackProducts = (productsData || []).map((p, idx) => ({
+  _id: p._id || `seed_prod_${p.sku || idx + 1}`,
+  ...p,
+}));
+
 // @desc    Get user's wishlist
 // @route   GET /api/wishlist
 // @access  Private
 exports.getWishlist = async (req, res, next) => {
   try {
-    let wishlist = await Wishlist.findOne({ userId: req.user._id }).populate({
-      path: 'products',
-      select: 'name price originalPrice discountPercentage images brand category stock rating ratingCount',
-    });
-
-    if (!wishlist) {
-      wishlist = await Wishlist.create({
-        userId: req.user._id,
-        products: [],
-      });
+    let wishlist = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        wishlist = await Wishlist.findOne({ userId: req.user._id }).populate({
+          path: 'products',
+          select: 'name price originalPrice discountPercentage images brand category stock rating ratingCount',
+        });
+      } catch (err) {
+        console.warn('[Wishlist Controller] DB getWishlist warning:', err.message);
+      }
     }
 
-    // Filter out any deleted products
-    const validProducts = wishlist.products.filter((p) => p !== null && p !== undefined);
-    if (validProducts.length !== wishlist.products.length) {
-      wishlist.products = validProducts.map((p) => p._id);
-      await wishlist.save();
-    }
+    const validProducts = wishlist?.products ? wishlist.products.filter((p) => p !== null && p !== undefined) : [];
 
     res.status(200).json({
       success: true,
@@ -43,7 +46,21 @@ exports.toggleWishlist = async (req, res, next) => {
   try {
     const { productId } = req.params;
 
-    const product = await Product.findById(productId);
+    let product = null;
+    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(productId)) {
+      try {
+        product = await Product.findById(productId);
+      } catch (err) {
+        // Fallthrough
+      }
+    }
+
+    if (!product) {
+      product = fallbackProducts.find(
+        (p) => String(p._id) === String(productId) || String(p.id) === String(productId) || p.sku === productId
+      );
+    }
+
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -51,30 +68,38 @@ exports.toggleWishlist = async (req, res, next) => {
       });
     }
 
-    let wishlist = await Wishlist.findOne({ userId: req.user._id });
+    let wishlist = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        wishlist = await Wishlist.findOne({ userId: req.user._id });
+        if (!wishlist) {
+          wishlist = new Wishlist({
+            userId: req.user._id,
+            products: [],
+          });
+        }
+      } catch (err) {
+        // Fallthrough
+      }
+    }
+
     if (!wishlist) {
-      wishlist = new Wishlist({
-        userId: req.user._id,
-        products: [],
-      });
+      wishlist = new Wishlist({ userId: req.user._id, products: [] });
     }
 
     const productIndex = wishlist.products.findIndex(
-      (id) => id.toString() === productId.toString()
+      (id) => String(id) === String(product._id) || String(id) === String(productId)
     );
 
     let inWishlist = false;
 
     if (productIndex > -1) {
-      // Remove from wishlist
       wishlist.products.splice(productIndex, 1);
       inWishlist = false;
     } else {
-      // Add to wishlist
       wishlist.products.push(product._id);
       inWishlist = true;
 
-      // Automatically log implicit wishlist interaction (weight = 3.0) for recommendations
       recordInteraction({
         userId: req.user._id,
         productId: product._id,
@@ -83,7 +108,13 @@ exports.toggleWishlist = async (req, res, next) => {
       }).catch(() => {});
     }
 
-    await wishlist.save();
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await wishlist.save();
+      } catch (err) {
+        console.warn('[Wishlist Controller] Save warning:', err.message);
+      }
+    }
 
     res.status(200).json({
       success: true,

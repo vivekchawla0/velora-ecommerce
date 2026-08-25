@@ -68,7 +68,7 @@ export const CheckoutPage = () => {
 
     try {
       const itemsPayload = cart.map((item) => ({
-        productId: item.product._id,
+        productId: item.product?._id || item.product?.id || item.product || item.productId,
         quantity: item.quantity,
       }));
 

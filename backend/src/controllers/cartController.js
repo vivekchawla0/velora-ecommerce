@@ -1,29 +1,49 @@
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
+const mongoose = require('mongoose');
 const { recordInteraction } = require('../services/interactionService');
+const { productsData } = require('../scripts/seed');
+
+const fallbackProducts = (productsData || []).map((p, idx) => ({
+  _id: p._id || `seed_prod_${p.sku || idx + 1}`,
+  ...p,
+}));
 
 /**
  * Format and populate cart helper
  */
 const formatPopulatedCart = async (cart) => {
-  await cart.populate({
-    path: 'items.productId',
-    select: 'name price originalPrice discountPercentage images brand category stock rating ratingCount',
-  });
-
-  // Filter out any items where the product might have been deleted from catalog
-  const validItems = cart.items.filter((item) => item.productId !== null && item.productId !== undefined);
-  if (validItems.length !== cart.items.length) {
-    cart.items = validItems;
-    await cart.save();
+  if (mongoose.connection.readyState === 1) {
+    try {
+      await cart.populate({
+        path: 'items.productId',
+        select: 'name price originalPrice discountPercentage images brand category stock rating ratingCount',
+      });
+    } catch (err) {
+      console.warn('[Cart Controller] Cart populate warning:', err.message);
+    }
   }
 
-  const items = cart.items.map((item) => ({
-    product: item.productId,
-    quantity: item.quantity,
-    price: item.price,
-    itemTotal: Number((item.price * item.quantity).toFixed(2)),
-  }));
+  const items = cart.items.map((item) => {
+    let prod = item.productId;
+    if (typeof prod === 'string' || !prod || !prod.name) {
+      const pId = prod?._id || prod || item.productId;
+      const found = fallbackProducts.find(
+        (p) => String(p._id) === String(pId) || String(p.id) === String(pId) || p.sku === pId
+      );
+      if (found) prod = found;
+    }
+
+    const price = item.price || prod?.price || 0;
+    const qty = item.quantity || 1;
+
+    return {
+      product: prod,
+      quantity: qty,
+      price,
+      itemTotal: Number((price * qty).toFixed(2)),
+    };
+  });
 
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
   const subtotal = Number(items.reduce((sum, i) => sum + i.itemTotal, 0).toFixed(2));
@@ -49,13 +69,23 @@ const formatPopulatedCart = async (cart) => {
 // @access  Private
 exports.getCart = async (req, res, next) => {
   try {
-    let cart = await Cart.findOne({ userId: req.user._id });
+    let cart = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        cart = await Cart.findOne({ userId: req.user._id });
+        if (!cart) {
+          cart = await Cart.create({
+            userId: req.user._id,
+            items: [],
+          });
+        }
+      } catch (err) {
+        console.warn('[Cart Controller] getCart DB error:', err.message);
+      }
+    }
 
     if (!cart) {
-      cart = await Cart.create({
-        userId: req.user._id,
-        items: [],
-      });
+      cart = new Cart({ userId: req.user._id, items: [] });
     }
 
     const formatted = await formatPopulatedCart(cart);
@@ -91,8 +121,22 @@ exports.addToCart = async (req, res, next) => {
       });
     }
 
-    // 1. Verify product exists and has sufficient stock in MongoDB
-    const product = await Product.findById(productId);
+    // 1. Verify product exists in DB or in-memory seed catalog
+    let product = null;
+    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(productId)) {
+      try {
+        product = await Product.findById(productId);
+      } catch (err) {
+        // Fallthrough
+      }
+    }
+
+    if (!product) {
+      product = fallbackProducts.find(
+        (p) => String(p._id) === String(productId) || String(p.id) === String(productId) || p.sku === productId
+      );
+    }
+
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -101,17 +145,28 @@ exports.addToCart = async (req, res, next) => {
     }
 
     // 2. Find or create user cart
-    let cart = await Cart.findOne({ userId: req.user._id });
+    let cart = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        cart = await Cart.findOne({ userId: req.user._id });
+        if (!cart) {
+          cart = new Cart({
+            userId: req.user._id,
+            items: [],
+          });
+        }
+      } catch (err) {
+        // Fallthrough
+      }
+    }
+
     if (!cart) {
-      cart = new Cart({
-        userId: req.user._id,
-        items: [],
-      });
+      cart = new Cart({ userId: req.user._id, items: [] });
     }
 
     // 3. Check existing item in cart
     const existingIndex = cart.items.findIndex(
-      (item) => item.productId.toString() === productId.toString()
+      (item) => String(item.productId?._id || item.productId) === String(product._id)
     );
 
     let newQuantity = qty;
@@ -119,27 +174,33 @@ exports.addToCart = async (req, res, next) => {
       newQuantity = cart.items[existingIndex].quantity + qty;
     }
 
-    // 4. Validate stock against live database inventory
-    if (newQuantity > product.stock) {
+    const availableStock = product.stock !== undefined ? product.stock : 99;
+    if (newQuantity > availableStock) {
       return res.status(400).json({
         success: false,
-        message: `Only ${product.stock} units available in stock.`,
-        availableStock: product.stock,
+        message: `Only ${availableStock} units available in stock.`,
+        availableStock,
       });
     }
 
     if (existingIndex > -1) {
       cart.items[existingIndex].quantity = newQuantity;
-      cart.items[existingIndex].price = product.price; // Use trusted database price
+      cart.items[existingIndex].price = product.price;
     } else {
       cart.items.push({
         productId: product._id,
         quantity: qty,
-        price: product.price, // Use trusted database price
+        price: product.price,
       });
     }
 
-    await cart.save();
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await cart.save();
+      } catch (err) {
+        console.warn('[Cart Controller] Cart save warning:', err.message);
+      }
+    }
 
     // 5. Automatically log implicit cart interaction (weight = 4.0) to feed recommender
     recordInteraction({
