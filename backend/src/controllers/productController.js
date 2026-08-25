@@ -168,21 +168,36 @@ const getProducts = async (req, res, next) => {
   }
 };
 
-// @desc    Get single product by ID
+// @desc    Get single product by ID or SKU or Slug
 // @route   GET /api/products/:id
 // @access  Public
 const getProductById = async (req, res, next) => {
   try {
+    const targetId = req.params.id;
     let product = null;
-    try {
-      product = await Product.findById(req.params.id);
-    } catch (err) {
-      // Ignore DB findById error
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        if (mongoose.Types.ObjectId.isValid(targetId)) {
+          product = await Product.findById(targetId).lean();
+        }
+        if (!product) {
+          product = await Product.findOne({
+            $or: [{ sku: targetId }, { slug: targetId }],
+          }).lean();
+        }
+      } catch (err) {
+        console.warn('[Product Controller] DB lookup error:', err.message);
+      }
     }
 
     if (!product) {
       product = fallbackProducts.find(
-        (p) => String(p._id) === String(req.params.id) || p.sku === req.params.id
+        (p) =>
+          String(p._id) === String(targetId) ||
+          String(p.id) === String(targetId) ||
+          p.sku === targetId ||
+          p.slug === targetId
       );
     }
 

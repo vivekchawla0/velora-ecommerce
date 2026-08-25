@@ -76,30 +76,33 @@ export const ProductDetailPage = () => {
 
   const fetchProductAndReviews = async () => {
     try {
-      const [prodRes, simRes, revRes] = await Promise.all([
-        api.get(`/products/${id}`),
-        api.get(`/recommendations/similar/${id}`, { params: { limit: 8 } }),
-        api.get(`/products/${id}/reviews`),
-      ]);
+      // 1. Fetch main product details first
+      const prodRes = await api.get(`/products/${id}`);
 
       if (prodRes.data?.product) {
-        setProduct(prodRes.data.product);
-        trackView(prodRes.data.product._id);
+        const prodData = prodRes.data.product;
+        setProduct(prodData);
+        trackView(prodData._id || prodData.id || id);
       }
 
-      const simItems = simRes.data?.recommendations || simRes.data?.similar;
-      if (simItems && Array.isArray(simItems)) {
-        setSimilarProducts(simItems);
-      }
+      // 2. Fetch recommendations & reviews independently in background without blocking PDP render
+      Promise.all([
+        api.get(`/recommendations/similar/${id}`, { params: { limit: 8 } }).catch(() => null),
+        api.get(`/products/${id}/reviews`).catch(() => null),
+      ]).then(([simRes, revRes]) => {
+        if (simRes?.data?.recommendations || simRes?.data?.similar) {
+          setSimilarProducts(simRes.data.recommendations || simRes.data.similar);
+        }
 
-      if (revRes.data?.reviews) {
-        setReviewsData({
-          reviews: revRes.data.reviews,
-          count: revRes.data.count,
-          averageRating: revRes.data.averageRating,
-          distributionPercentages: revRes.data.distributionPercentages,
-        });
-      }
+        if (revRes?.data?.reviews) {
+          setReviewsData({
+            reviews: revRes.data.reviews,
+            count: revRes.data.count || revRes.data.reviews.length,
+            averageRating: revRes.data.averageRating || 4.5,
+            distributionPercentages: revRes.data.distributionPercentages || { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+          });
+        }
+      });
     } catch (err) {
       console.warn('Error loading product details:', err.message);
     } finally {
