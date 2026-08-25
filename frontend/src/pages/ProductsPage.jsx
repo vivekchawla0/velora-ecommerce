@@ -37,7 +37,8 @@ export const ProductsPage = () => {
     const fetchCategories = async () => {
       try {
         const res = await api.get('/products/categories');
-        if (res.data?.categories) setCategories(res.data.categories);
+        const list = Array.isArray(res.data) ? res.data : res.data?.categories || res.data?.data || [];
+        if (list && list.length > 0) setCategories(list);
       } catch (err) {
         console.warn('Error loading categories:', err.message);
       }
@@ -64,7 +65,10 @@ export const ProductsPage = () => {
 
         const res = await api.get('/products', { params });
         if (res.data) {
-          const raw = res.data.products || res.data.data || [];
+          const raw = Array.isArray(res.data)
+            ? res.data
+            : res.data.products || res.data.data || res.data.items || [];
+
           // Deduplicate products by _id
           const seen = new Set();
           const deduped = raw.filter((p) => {
@@ -75,7 +79,13 @@ export const ProductsPage = () => {
           });
 
           setProducts(deduped);
-          setTotalProducts(res.data.total ?? res.data.totalProducts ?? res.data.count ?? deduped.length ?? 0);
+          const totalVal =
+            res.data.total ??
+            res.data.totalProducts ??
+            res.data.count ??
+            deduped.length ??
+            0;
+          setTotalProducts(totalVal);
           setTotalPages(res.data.totalPages || 1);
         }
       } catch (err) {

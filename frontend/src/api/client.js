@@ -1,6 +1,11 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+let API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+
+// In production builds, override any leftover localhost VITE_API_URL to relative '/api'
+if (import.meta.env.PROD && API_BASE_URL.includes('localhost')) {
+  API_BASE_URL = '/api';
+}
 
 const api = axios.create({
   baseURL: API_BASE_URL,
