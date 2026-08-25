@@ -138,11 +138,11 @@ export const Footer = () => {
                 8958694403
               </a>
               <a
-                href="mailto:Vivekkumar004@gmail.com"
+                href="mailto:vivekchawla004@gmail.com"
                 className="footer-link-dark"
                 style={{ color: '#A0A0A0', textDecoration: 'none', wordBreak: 'break-all' }}
               >
-                Vivekkumar004@gmail.com
+                vivekchawla004@gmail.com
               </a>
             </div>
           </div>
