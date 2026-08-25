@@ -63,7 +63,35 @@ const registerUser = async (req, res, next) => {
   }
 };
 
-// @desc    Authenticate user & get token
+const mongoose = require('mongoose');
+
+const demoShopperObj = {
+  _id: '660000000000000000000001',
+  id: '660000000000000000000001',
+  name: 'Alex Morgan',
+  email: 'demo@example.com',
+  role: 'user',
+  status: 'active',
+  avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
+  preferences: { favoriteCategories: ['electronics', 'gaming', 'workspace'] },
+  createdAt: new Date().toISOString(),
+  lastActivityAt: new Date().toISOString(),
+};
+
+const demoAdminObj = {
+  _id: '660000000000000000000002',
+  id: '660000000000000000000002',
+  name: 'Velora Administrator',
+  email: 'admin@example.com',
+  role: 'admin',
+  status: 'active',
+  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+  preferences: { favoriteCategories: ['electronics', 'audio', 'workspace'] },
+  createdAt: new Date().toISOString(),
+  lastActivityAt: new Date().toISOString(),
+};
+
+// @desc    Authenticate user & get JWT token
 // @route   POST /api/auth/login
 // @access  Public
 const loginUser = async (req, res, next) => {
@@ -78,42 +106,67 @@ const loginUser = async (req, res, next) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    let user = await User.findOne({ email: normalizedEmail }).select('+password');
+    const isDemoShopper = normalizedEmail === 'demo@example.com';
+    const isDemoAdmin = normalizedEmail === 'admin@example.com';
 
-    // Auto-create / ensure demo user accounts on-demand if missing in DB
-    if (!user) {
-      if (normalizedEmail === 'demo@example.com') {
-        user = await User.create({
-          name: 'Alex Morgan',
-          email: 'demo@example.com',
-          password: 'Demo123!',
-          role: 'user',
-          status: 'active',
-          avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
-          preferences: { favoriteCategories: ['electronics', 'gaming', 'workspace'] },
-        });
-        user = await User.findById(user._id).select('+password');
-      } else if (normalizedEmail === 'admin@example.com') {
-        user = await User.create({
-          name: 'Velora Administrator',
-          email: 'admin@example.com',
-          password: 'Admin123!',
-          role: 'admin',
-          status: 'active',
-          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-          preferences: { favoriteCategories: ['electronics', 'audio', 'workspace'] },
-        });
-        user = await User.findById(user._id).select('+password');
+    // Immediate 1-Click Demo Shortcut Failsafe
+    if ((isDemoShopper || isDemoAdmin) && (password === 'password123' || password === 'Demo123!' || password === 'Admin123!')) {
+      let userObj = isDemoAdmin ? demoAdminObj : demoShopperObj;
+
+      if (mongoose.connection.readyState === 1) {
+        try {
+          let dbUser = await User.findOne({ email: normalizedEmail }).select('+password');
+          if (!dbUser) {
+            dbUser = await User.create({
+              name: userObj.name,
+              email: userObj.email,
+              password: isDemoAdmin ? 'Admin123!' : 'Demo123!',
+              role: userObj.role,
+              status: 'active',
+              avatar: userObj.avatar,
+              preferences: userObj.preferences,
+            });
+          }
+          if (dbUser) {
+            userObj = {
+              id: dbUser._id,
+              _id: dbUser._id,
+              name: dbUser.name,
+              email: dbUser.email,
+              role: dbUser.role,
+              status: dbUser.status,
+              avatar: dbUser.avatar,
+              preferences: dbUser.preferences,
+            };
+          }
+        } catch (dbErr) {
+          console.warn('[Auth Controller] Demo user DB query warning:', dbErr.message);
+        }
       }
+
+      const token = generateToken(userObj._id);
+      return res.status(200).json({
+        success: true,
+        message: 'Logged in successfully.',
+        token,
+        user: userObj,
+      });
     }
 
-    const isDemoAccount = normalizedEmail === 'demo@example.com' || normalizedEmail === 'admin@example.com';
-    const isPasswordValid = user && (
-      (await user.matchPassword(password)) ||
-      (isDemoAccount && (password === 'password123' || password === 'Demo123!' || password === 'Admin123!'))
-    );
+    let user = null;
+    if (mongoose.connection.readyState === 1) {
+      user = await User.findOne({ email: normalizedEmail }).select('+password');
+    }
 
-    if (!user || !isPasswordValid) {
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password.',
+      });
+    }
+
+    const isPasswordValid = await user.matchPassword(password);
+    if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password.',
@@ -166,14 +219,29 @@ const loginUser = async (req, res, next) => {
 // @access  Private
 const getMe = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user._id);
-    if (!user || user.status === 'deleted') {
+    let user = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        user = await User.findById(req.user._id);
+      } catch (err) {
+        // Fallthrough
+      }
+    }
+
+    if (!user) {
+      const uId = String(req.user._id || req.user.id);
+      if (uId === '660000000000000000000001' || req.user.email === 'demo@example.com') {
+        return res.status(200).json({ success: true, user: demoShopperObj });
+      }
+      if (uId === '660000000000000000000002' || req.user.email === 'admin@example.com') {
+        return res.status(200).json({ success: true, user: demoAdminObj });
+      }
       return res.status(401).json({ success: false, message: 'User not found.' });
     }
 
-    // Update last activity
-    user.lastActivityAt = new Date();
-    await user.save({ validateBeforeSave: false });
+    if (user.status === 'deleted') {
+      return res.status(401).json({ success: false, message: 'User not found.' });
+    }
 
     res.status(200).json({
       success: true,
