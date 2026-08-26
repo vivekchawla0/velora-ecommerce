@@ -517,7 +517,7 @@ const addAmazonProduct = async (req, res, next) => {
       discountPercentage: Math.max(0, numDiscount),
       currency: 'INR',
       category: String(category).toLowerCase().trim(),
-      collections: Array.isArray(collections) && collections.length > 0 ? collections : ['shop-all'],
+      collections: Array.isArray(collections) && collections.length > 0 ? collections.map((c) => String(c).toLowerCase().trim()) : ['shop-all'],
       images: Array.isArray(images) && images.length > 0 ? images : [`https://m.media-amazon.com/images/I/${finalAsin}.jpg`],
       description: description || `${name} - Amazon India catalog item`,
       features: Array.isArray(features) ? features : [],
@@ -531,6 +531,15 @@ const addAmazonProduct = async (req, res, next) => {
       isActive: true,
       amazonLastSyncedAt: new Date(),
     });
+
+    try {
+      const { productsData } = require('../scripts/seed');
+      if (Array.isArray(productsData)) {
+        productsData.unshift(product.toObject ? product.toObject() : product);
+      }
+    } catch (e) {
+      // Non-critical memory cache sync
+    }
 
     res.status(201).json({
       success: true,
