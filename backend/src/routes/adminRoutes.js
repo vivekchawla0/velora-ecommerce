@@ -9,6 +9,7 @@ const {
   updateOrderStatus,
   fetchAmazonProduct,
   addAmazonProduct,
+  syncAmazonProducts,
   toggleProductStatus,
 } = require('../controllers/adminController');
 const {
