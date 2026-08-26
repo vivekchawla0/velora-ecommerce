@@ -473,10 +473,10 @@ const addAmazonProduct = async (req, res, next) => {
       affiliateUrl,
     } = req.body;
 
-    if (!name || price === undefined || !category) {
+    if (!name || price === undefined || price === null || isNaN(Number(price)) || Number(price) <= 0 || !category) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide all required fields: name, price, category.',
+        message: 'Price unavailable from Amazon. Cannot save product without a valid Amazon price.',
       });
     }
 

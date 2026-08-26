@@ -647,18 +647,25 @@ export const AdminDashboardPage = () => {
                 </div>
               )}
 
-              {/* Complete Title Editor */}
+              {/* Complete Title Display */}
               <div style={{ marginBottom: '1.5rem' }}>
                 <label className="input-label" style={{ fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Complete Official Product Title
                 </label>
-                <textarea
-                  rows={2}
-                  value={amazonPreview.name || ''}
-                  onChange={(e) => setAmazonPreview({ ...amazonPreview, name: e.target.value })}
-                  className="input-field"
-                  style={{ fontSize: '0.95rem', fontWeight: 700, lineHeight: 1.4 }}
-                />
+                <div
+                  style={{
+                    padding: '0.85rem 1rem',
+                    background: '#FFFFFF',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: '0.95rem',
+                    fontWeight: 750,
+                    lineHeight: 1.4,
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  {amazonPreview.name}
+                </div>
               </div>
 
               {/* Manual Product Photos Upload & Gallery Manager */}
@@ -793,13 +800,10 @@ export const AdminDashboardPage = () => {
                 </div>
 
                 <div>
-                  <label className="input-label" style={{ fontSize: '0.785rem', fontWeight: 700 }}>Brand</label>
-                  <input
-                    type="text"
-                    value={amazonPreview.brand || 'Amazon'}
-                    onChange={(e) => setAmazonPreview({ ...amazonPreview, brand: e.target.value })}
-                    className="input-field"
-                  />
+                  <span style={{ fontSize: '0.785rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '0.35rem' }}>Brand</span>
+                  <div style={{ padding: '0.75rem 1rem', background: '#FFFFFF', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '0.9rem', fontWeight: 750 }}>
+                    {amazonPreview.brand || 'Amazon'}
+                  </div>
                 </div>
               </div>
 
