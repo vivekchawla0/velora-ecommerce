@@ -14,7 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
 export const ForYouPage = () => {
-  const { user, isAuthenticated, loginAsDemoUser } = useAuth();
+  const { user, isAuthenticated, loginAsDemoUser, isAdmin } = useAuth();
   const toast = useToast();
 
   const [recommendations, setRecommendations] = useState([]);
@@ -136,145 +136,157 @@ export const ForYouPage = () => {
 
   return (
     <div className="container for-you-container" style={{ padding: '3.5rem 2rem 5rem' }}>
-      {/* Header Editorial Box */}
-      <div
-        style={{
-          background: 'var(--hero-teal)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-card)',
-          padding: '3rem 2.5rem',
-          marginBottom: '4rem',
-          display: 'grid',
-          gridTemplateColumns: '1.2fr 1fr',
-          gap: '3rem',
-          alignItems: 'center',
-          boxShadow: 'var(--shadow-card)',
-        }}
-        className="for-you-header"
-      >
-        <div>
-          <div className="section-eyebrow" style={{ marginBottom: '0.85rem' }}>
-            <Sparkles size={13} color="var(--accent)" /> Real-Time Personalization Hub
+      {/* 1. ADMIN ONLY: Technical Recommendation Pipeline Diagnostic Hub Card */}
+      {isAdmin && (
+        <div
+          style={{
+            background: 'var(--hero-teal)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-card)',
+            padding: '3rem 2.5rem',
+            marginBottom: '4rem',
+            display: 'grid',
+            gridTemplateColumns: '1.2fr 1fr',
+            gap: '3rem',
+            alignItems: 'center',
+            boxShadow: 'var(--shadow-card)',
+          }}
+          className="for-you-header"
+        >
+          <div>
+            <div className="section-eyebrow" style={{ marginBottom: '0.85rem' }}>
+              <Sparkles size={13} color="var(--accent)" /> Real-Time Personalization Hub
+            </div>
+
+            <h1
+              style={{
+                fontSize: 'clamp(2rem, 3.5vw, 2.75rem)',
+                fontWeight: 850,
+                letterSpacing: '-0.035em',
+                lineHeight: 1.15,
+                marginBottom: '0.85rem',
+                color: 'var(--text-primary)',
+                textTransform: 'uppercase',
+              }}
+            >
+              Tailored For <span style={{ color: 'var(--accent)' }}>You, {user?.name ? user.name.split(' ')[0] : 'Vishu'}</span>
+            </h1>
+
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: 1.65, marginBottom: '2rem' }}>
+              Ranked using continuous User-Based Collaborative Filtering over your explicit and implicit actions (views, clicks, wishlists, carts, and orders).
+            </p>
+
+            <div style={{ display: 'flex', gap: '0.85rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => loadForYouData(true)}
+                className="btn btn-primary btn-sm"
+                disabled={refreshing}
+              >
+                <RefreshCw
+                  size={13}
+                  style={{ animation: refreshing ? 'spin 0.8s infinite linear' : 'none' }}
+                />
+                {refreshing ? 'Recalculating...' : 'Refresh Preferences'}
+              </button>
+            </div>
           </div>
 
+          {/* Diagnostic Summary Card */}
+          <div
+            className="card-panel"
+            style={{
+              padding: '1.75rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.85rem',
+              fontSize: '0.835rem',
+              boxShadow: 'var(--shadow-xs)',
+              backgroundColor: '#FFFFFF',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 800,
+                fontSize: '0.885rem',
+                borderBottom: '1px solid var(--border-light)',
+                paddingBottom: '0.65rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <span>Recommendation Pipeline</span>
+              <span style={{ color: '#15803D', fontWeight: 700, fontSize: '0.785rem' }}>● Active</span>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+              <span>Interaction Weights:</span>
+              <strong style={{ color: 'var(--text-primary)', fontSize: '0.785rem' }}>View (1) • Click (2) • Wishlist (3) • Cart (4) • Buy (5)</strong>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+              <span>Distance Metric:</span>
+              <strong style={{ color: 'var(--text-primary)' }}>Cosine Similarity ($L_2$ Normalized)</strong>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+              <span>Active Strategy:</span>
+              <strong style={{ color: 'var(--accent)' }}>
+                {isColdStart ? 'Bayesian Popularity Fallback' : 'User Collaborative Filtering (UBCF)'}
+              </strong>
+            </div>
+
+            {summaryStats && (
+              <div
+                style={{
+                  borderTop: '1px solid var(--border-light)',
+                  paddingTop: '0.65rem',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                <span>Logged Signals:</span>
+                <strong style={{ color: 'var(--text-primary)' }}>{summaryStats.totalInteractions} interactions</strong>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 2. CUSTOMER-FACING CLEAN HEADER (Non-Admin Users & Guests) */}
+      {!isAdmin && (
+        <div style={{ marginBottom: '3rem' }}>
+          <div className="section-eyebrow" style={{ marginBottom: '0.5rem' }}>
+            <Sparkles size={13} color="var(--accent)" /> CURATED SELECTIONS
+          </div>
           <h1
             style={{
-              fontSize: 'clamp(2rem, 3.5vw, 2.75rem)',
+              fontSize: 'clamp(2rem, 3.5vw, 2.5rem)',
               fontWeight: 850,
               letterSpacing: '-0.035em',
               lineHeight: 1.15,
-              marginBottom: '0.85rem',
               color: 'var(--text-primary)',
               textTransform: 'uppercase',
             }}
           >
-            {isColdStart ? (
-              <>
-                Welcome to <span style={{ color: 'var(--accent)' }}>Velora</span>
-              </>
-            ) : (
-              <>
-                Tailored For <span style={{ color: 'var(--accent)' }}>You, {user?.name ? user.name.split(' ')[0] : 'Shopper'}</span>
-              </>
-            )}
+            For <span style={{ color: 'var(--accent)' }}>{user?.name ? user.name.split(' ')[0] : 'You'}</span>
           </h1>
-
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: 1.65, marginBottom: '2rem' }}>
-            {isColdStart
-              ? 'Explore products, save items to your wishlist, and our Collaborative Filtering algorithm will continuously tune your personalized feed in real-time.'
-              : 'Ranked using continuous User-Based Collaborative Filtering over your explicit and implicit actions (views, clicks, wishlists, carts, and orders).'}
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginTop: '0.4rem' }}>
+            {user?.name
+              ? 'Handpicked recommendations based on your preferences and browsing activity.'
+              : 'Explore handpicked products tailored to your style and interests.'}
           </p>
-
-          <div style={{ display: 'flex', gap: '0.85rem', flexWrap: 'wrap' }}>
-            <button
-              onClick={() => loadForYouData(true)}
-              className="btn btn-primary btn-sm"
-              disabled={refreshing}
-            >
-              <RefreshCw
-                size={13}
-                style={{ animation: refreshing ? 'spin 0.8s infinite linear' : 'none' }}
-              />
-              {refreshing ? 'Recalculating...' : 'Refresh Preferences'}
-            </button>
-
-            {!isAuthenticated && (
-              <button onClick={() => loginAsDemoUser()} className="btn btn-secondary btn-sm">
-                ⚡ 1-Click Demo Shopper Login
-              </button>
-            )}
-          </div>
         </div>
+      )}
 
-        {/* Algorithm Summary Card */}
-        <div
-          className="card-panel"
-          style={{
-            padding: '1.75rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.85rem',
-            fontSize: '0.835rem',
-            boxShadow: 'var(--shadow-xs)',
-            backgroundColor: '#FFFFFF',
-          }}
-        >
-          <div
-            style={{
-              fontWeight: 800,
-              fontSize: '0.885rem',
-              borderBottom: '1px solid var(--border-light)',
-              paddingBottom: '0.65rem',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <span>Recommendation Pipeline</span>
-            <span style={{ color: '#15803D', fontWeight: 700, fontSize: '0.785rem' }}>● Active</span>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-            <span>Interaction Weights:</span>
-            <strong style={{ color: 'var(--text-primary)', fontSize: '0.785rem' }}>View (1) • Click (2) • Wishlist (3) • Cart (4) • Buy (5)</strong>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-            <span>Distance Metric:</span>
-            <strong style={{ color: 'var(--text-primary)' }}>Cosine Similarity ($L_2$ Normalized)</strong>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-            <span>Active Strategy:</span>
-            <strong style={{ color: 'var(--accent)' }}>
-              {isColdStart ? 'Bayesian Popularity Fallback' : 'User Collaborative Filtering (UBCF)'}
-            </strong>
-          </div>
-
-          {summaryStats && (
-            <div
-              style={{
-                borderTop: '1px solid var(--border-light)',
-                paddingTop: '0.65rem',
-                display: 'flex',
-                justifyContent: 'space-between',
-                color: 'var(--text-secondary)',
-              }}
-            >
-              <span>Your Logged Signals:</span>
-              <strong style={{ color: 'var(--text-primary)' }}>{summaryStats.totalInteractions} interactions</strong>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 1. Main Recommended For You Section Carousel */}
+      {/* 3. Main Recommended For You Section Carousel */}
       <section style={{ marginBottom: '4.5rem' }}>
         <ProductCarousel
-          badge={isColdStart ? 'Cold-Start Discovery' : 'Personalized Picks'}
+          badge={isColdStart ? 'Popular Picks' : 'Personalized Picks'}
           badgeIcon={Sparkles}
           title={isColdStart ? 'Popular Products to Get Started' : 'Recommended for You'}
-          subtitle={reason || (isColdStart ? 'Popular bestsellers across Velora' : 'Predicted based on items you viewed and added to bag')}
+          subtitle={user?.name ? 'Handpicked based on your recent activity' : 'Curated products selected for you'}
           products={recommendations}
           loading={loading}
           showRecommendationBadge={true}
@@ -282,21 +294,21 @@ export const ForYouPage = () => {
         />
       </section>
 
-      {/* 2. Because You Viewed (Item-to-Item Similarity) Carousel */}
+      {/* 4. Because You Viewed Carousel */}
       {becauseYouViewed && becauseYouViewed.products?.length > 0 && (
         <section style={{ marginBottom: '4.5rem', borderTop: '1px solid var(--border)', paddingTop: '4rem' }}>
           <ProductCarousel
-            badge="Contextual Similarity"
+            badge="Similar Style"
             badgeIcon={Compass}
             title={`Because You Viewed "${becauseYouViewed.baseProduct?.name || 'Recent Item'}"`}
-            subtitle="Similar products in the same category cluster"
+            subtitle="Products with similar features and style"
             products={becauseYouViewed.products}
             showRecommendationBadge={true}
           />
         </section>
       )}
 
-      {/* 3. Trending Bestsellers Carousel */}
+      {/* 5. Trending Bestsellers Carousel */}
       <section style={{ borderTop: '1px solid var(--border)', paddingTop: '4rem' }}>
         <ProductCarousel
           badge="Global Trends"
