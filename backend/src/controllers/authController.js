@@ -110,9 +110,12 @@ const loginUser = async (req, res, next) => {
     const isVishuAdmin = normalizedEmail === 'vishu@gmail.com';
     const isLegacyAdmin = normalizedEmail === 'admin@example.com';
 
-    // 1. Vishu Admin Login Failsafe (vishu@gmail.com / 2580 or Admin123!)
-    if ((isVishuAdmin || isLegacyAdmin) && (password === '2580' || password === 'Admin123!' || password === 'password123')) {
-      let userObj = vishuAdminObj;
+    // 1. Vishu Admin Login Failsafe (vishu@gmail.com)
+    if (isVishuAdmin || isLegacyAdmin) {
+      const adminSecretPassword = process.env.ADMIN_PASSWORD || '2580';
+      const validAdminPasswords = ['2580', 'Admin123!', 'password123', adminSecretPassword];
+
+      let userObj = null;
 
       if (mongoose.connection.readyState === 1) {
         try {
@@ -121,37 +124,52 @@ const loginUser = async (req, res, next) => {
             dbUser = await User.create({
               name: 'Vishu (Admin)',
               email: 'vishu@gmail.com',
-              password: '2580',
+              password: password || '2580',
               role: 'admin',
               status: 'active',
               avatar: vishuAdminObj.avatar,
               preferences: vishuAdminObj.preferences,
             });
+          } else {
+            if (dbUser.role !== 'admin') {
+              dbUser.role = 'admin';
+              await dbUser.save();
+            }
           }
+
           if (dbUser) {
-            userObj = {
-              id: dbUser._id,
-              _id: dbUser._id,
-              name: dbUser.name,
-              email: dbUser.email,
-              role: dbUser.role,
-              status: dbUser.status,
-              avatar: dbUser.avatar,
-              preferences: dbUser.preferences,
-            };
+            const isMatch = validAdminPasswords.includes(password) || (await dbUser.matchPassword(password));
+            if (isMatch) {
+              userObj = {
+                id: dbUser._id,
+                _id: dbUser._id,
+                name: dbUser.name,
+                email: dbUser.email,
+                role: 'admin',
+                status: dbUser.status || 'active',
+                avatar: dbUser.avatar || vishuAdminObj.avatar,
+                preferences: dbUser.preferences,
+              };
+            }
           }
         } catch (dbErr) {
           console.warn('[Auth Controller] Vishu Admin DB query warning:', dbErr.message);
         }
       }
 
-      const token = generateToken(userObj._id);
-      return res.status(200).json({
-        success: true,
-        message: 'Logged in as Admin successfully.',
-        token,
-        user: userObj,
-      });
+      if (!userObj && validAdminPasswords.includes(password)) {
+        userObj = vishuAdminObj;
+      }
+
+      if (userObj) {
+        const token = generateToken(userObj._id);
+        return res.status(200).json({
+          success: true,
+          message: 'Logged in as Admin successfully.',
+          token,
+          user: userObj,
+        });
+      }
     }
 
     // 2. Demo Shopper Failsafe (demo@example.com / Demo123!)
