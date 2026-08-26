@@ -49,12 +49,17 @@ const protect = async (req, res, next) => {
     const decoded = jwt.verify(token, jwtSecret);
 
     let user = null;
-    if (mongoose.connection.readyState === 1) {
-      try {
-        user = await User.findById(decoded.id).select('-password');
-      } catch (err) {
-        // Fallthrough
+    const { connectDB } = require('../config/db');
+
+    try {
+      if (mongoose.connection.readyState !== 1) {
+        await connectDB();
       }
+      if (mongoose.connection.readyState === 1) {
+        user = await User.findById(decoded.id).select('-password');
+      }
+    } catch (err) {
+      console.warn('[Auth Middleware] DB lookup warning:', err.message);
     }
 
     if (!user) {
@@ -128,12 +133,17 @@ const optionalAuth = async (req, res, next) => {
     const decoded = jwt.verify(token, jwtSecret);
 
     let user = null;
-    if (mongoose.connection.readyState === 1) {
-      try {
-        user = await User.findById(decoded.id).select('-password');
-      } catch (err) {
-        // Fallthrough
+    const { connectDB } = require('../config/db');
+
+    try {
+      if (mongoose.connection.readyState !== 1) {
+        await connectDB();
       }
+      if (mongoose.connection.readyState === 1) {
+        user = await User.findById(decoded.id).select('-password');
+      }
+    } catch (err) {
+      // Fallthrough
     }
 
     if (!user) {

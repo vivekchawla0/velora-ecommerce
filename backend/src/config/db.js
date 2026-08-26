@@ -8,14 +8,13 @@ let mongoMemoryServer = null;
  * In automated test suites (NODE_ENV === 'test'), falls back to MongoMemoryServer if needed.
  */
 const connectDB = async () => {
-  mongoose.set('bufferCommands', false);
   if (mongoose.connection.readyState >= 1) {
     return mongoose.connection;
   }
   try {
-    const mongoUri = process.env.MONGO_URI;
+    const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
     
-    // 1. If MONGO_URI is set (e.g. MongoDB Atlas), connect directly
+    // 1. If MONGO_URI or MONGODB_URI is set (e.g. MongoDB Atlas), connect directly
     if (mongoUri) {
       try {
         const conn = await mongoose.connect(mongoUri, {

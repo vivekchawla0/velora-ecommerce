@@ -110,6 +110,17 @@ const loginUser = async (req, res, next) => {
     const isVishuAdmin = normalizedEmail === 'vishu@gmail.com';
     const isLegacyAdmin = normalizedEmail === 'admin@example.com';
 
+    const { connectDB } = require('../config/db');
+
+    // Ensure database connection is active
+    if (mongoose.connection.readyState !== 1) {
+      try {
+        await connectDB();
+      } catch (e) {
+        console.warn('[Auth Controller] DB connect attempt notice:', e.message);
+      }
+    }
+
     // 1. Vishu Admin Login Failsafe (vishu@gmail.com)
     if (isVishuAdmin || isLegacyAdmin) {
       const adminSecretPassword = process.env.ADMIN_PASSWORD || '2580';
@@ -117,44 +128,42 @@ const loginUser = async (req, res, next) => {
 
       let userObj = null;
 
-      if (mongoose.connection.readyState === 1) {
-        try {
-          let dbUser = await User.findOne({ email: 'vishu@gmail.com' }).select('+password');
-          if (!dbUser) {
-            dbUser = await User.create({
-              name: 'Vishu (Admin)',
-              email: 'vishu@gmail.com',
-              password: password || '2580',
-              role: 'admin',
-              status: 'active',
-              avatar: vishuAdminObj.avatar,
-              preferences: vishuAdminObj.preferences,
-            });
-          } else {
-            if (dbUser.role !== 'admin') {
-              dbUser.role = 'admin';
-              await dbUser.save();
-            }
+      try {
+        let dbUser = await User.findOne({ email: 'vishu@gmail.com' }).select('+password');
+        if (!dbUser) {
+          dbUser = await User.create({
+            name: 'Vishu (Admin)',
+            email: 'vishu@gmail.com',
+            password: password || '2580',
+            role: 'admin',
+            status: 'active',
+            avatar: vishuAdminObj.avatar,
+            preferences: vishuAdminObj.preferences,
+          });
+        } else {
+          if (dbUser.role !== 'admin') {
+            dbUser.role = 'admin';
+            await dbUser.save();
           }
-
-          if (dbUser) {
-            const isMatch = validAdminPasswords.includes(password) || (await dbUser.matchPassword(password));
-            if (isMatch) {
-              userObj = {
-                id: dbUser._id,
-                _id: dbUser._id,
-                name: dbUser.name,
-                email: dbUser.email,
-                role: 'admin',
-                status: dbUser.status || 'active',
-                avatar: dbUser.avatar || vishuAdminObj.avatar,
-                preferences: dbUser.preferences,
-              };
-            }
-          }
-        } catch (dbErr) {
-          console.warn('[Auth Controller] Vishu Admin DB query warning:', dbErr.message);
         }
+
+        if (dbUser) {
+          const isMatch = validAdminPasswords.includes(password) || (await dbUser.matchPassword(password));
+          if (isMatch) {
+            userObj = {
+              id: dbUser._id,
+              _id: dbUser._id,
+              name: dbUser.name,
+              email: dbUser.email,
+              role: 'admin',
+              status: dbUser.status || 'active',
+              avatar: dbUser.avatar || vishuAdminObj.avatar,
+              preferences: dbUser.preferences,
+            };
+          }
+        }
+      } catch (dbErr) {
+        console.warn('[Auth Controller] Vishu Admin DB query warning:', dbErr.message);
       }
 
       if (!userObj && validAdminPasswords.includes(password)) {
@@ -176,35 +185,33 @@ const loginUser = async (req, res, next) => {
     if (isDemoShopper && (password === 'Demo123!' || password === 'password123')) {
       let userObj = demoShopperObj;
 
-      if (mongoose.connection.readyState === 1) {
-        try {
-          let dbUser = await User.findOne({ email: 'demo@example.com' }).select('+password');
-          if (!dbUser) {
-            dbUser = await User.create({
-              name: 'Alex Morgan',
-              email: 'demo@example.com',
-              password: 'Demo123!',
-              role: 'user',
-              status: 'active',
-              avatar: demoShopperObj.avatar,
-              preferences: demoShopperObj.preferences,
-            });
-          }
-          if (dbUser) {
-            userObj = {
-              id: dbUser._id,
-              _id: dbUser._id,
-              name: dbUser.name,
-              email: dbUser.email,
-              role: dbUser.role,
-              status: dbUser.status,
-              avatar: dbUser.avatar,
-              preferences: dbUser.preferences,
-            };
-          }
-        } catch (dbErr) {
-          console.warn('[Auth Controller] Demo user DB query warning:', dbErr.message);
+      try {
+        let dbUser = await User.findOne({ email: 'demo@example.com' }).select('+password');
+        if (!dbUser) {
+          dbUser = await User.create({
+            name: 'Alex Morgan',
+            email: 'demo@example.com',
+            password: 'Demo123!',
+            role: 'user',
+            status: 'active',
+            avatar: demoShopperObj.avatar,
+            preferences: demoShopperObj.preferences,
+          });
         }
+        if (dbUser) {
+          userObj = {
+            id: dbUser._id,
+            _id: dbUser._id,
+            name: dbUser.name,
+            email: dbUser.email,
+            role: dbUser.role,
+            status: dbUser.status,
+            avatar: dbUser.avatar,
+            preferences: dbUser.preferences,
+          };
+        }
+      } catch (dbErr) {
+        console.warn('[Auth Controller] Demo user DB query warning:', dbErr.message);
       }
 
       const token = generateToken(userObj._id);
@@ -217,8 +224,10 @@ const loginUser = async (req, res, next) => {
     }
 
     let user = null;
-    if (mongoose.connection.readyState === 1) {
+    try {
       user = await User.findOne({ email: normalizedEmail }).select('+password');
+    } catch (err) {
+      console.warn('[Auth Controller] User findOne warning:', err.message);
     }
 
     if (!user) {
@@ -282,13 +291,19 @@ const loginUser = async (req, res, next) => {
 // @access  Private
 const getMe = async (req, res, next) => {
   try {
-    let user = null;
-    if (mongoose.connection.readyState === 1) {
+    const { connectDB } = require('../config/db');
+
+    if (mongoose.connection.readyState !== 1) {
       try {
-        user = await User.findById(req.user._id);
-      } catch (err) {
-        // Fallthrough
-      }
+        await connectDB();
+      } catch (e) {}
+    }
+
+    let user = null;
+    try {
+      user = await User.findById(req.user._id);
+    } catch (err) {
+      // Fallthrough
     }
 
     if (!user) {
