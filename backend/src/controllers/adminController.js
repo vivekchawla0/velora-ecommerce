@@ -5,6 +5,12 @@ const User = require('../models/User');
 const Interaction = require('../models/Interaction');
 const RecommendationFeedback = require('../models/RecommendationFeedback');
 const { productsData } = require('../scripts/seed');
+const {
+  extractAsin,
+  fetchAmazonProductData,
+  syncAmazonProduct,
+  syncAllActiveAmazonProducts,
+} = require('../services/amazonService');
 
 // @desc    Get dashboard metrics & platform statistics including recommendation analytics
 // @route   GET /api/admin/stats
@@ -411,17 +417,6 @@ const fetchAmazonProduct = async (req, res, next) => {
       });
     }
 
-    const extractAsin = (inputUrl) => {
-      if (!inputUrl) return null;
-      const str = String(inputUrl).trim();
-      if (/^[A-Z0-9]{10}$/i.test(str)) return str.toUpperCase();
-
-      const matches =
-        str.match(/(?:dp|gp\/product|ASIN|product)\/([A-Z0-9]{10})/i) ||
-        str.match(/\/([A-Z0-9]{10})(?:[/?#]|$)/i);
-      return matches ? matches[1].toUpperCase() : null;
-    };
-
     const asin = extractAsin(url);
     if (!asin) {
       return res.status(400).json({
@@ -446,84 +441,8 @@ const fetchAmazonProduct = async (req, res, next) => {
       }
     }
 
-    const associateTag = process.env.AMAZON_ASSOCIATE_TAG || 'velora004-21';
-    const cleanAmazonUrl = `https://www.amazon.in/dp/${asin}`;
-    const affiliateUrl = `${cleanAmazonUrl}?tag=${associateTag}`;
-
-    let title = '';
-    let brand = 'Amazon';
-    let price = 0;
-    let originalPrice = 0;
-    let discountPercentage = 0;
-    let description = '';
-    let images = [];
-    let rating = 4.5;
-    let ratingCount = 120;
-    let availability = 'In Stock';
-
-    // Server-side Metadata Fetch Fallback
-    try {
-      const axios = require('axios');
-      const response = await axios.get(cleanAmazonUrl, {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept-Language': 'en-US,en;q=0.9',
-        },
-        timeout: 6000,
-      });
-
-      const html = response.data || '';
-      const ogTitleMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i);
-      const titleTagMatch = html.match(/<title>([^<]+)<\/title>/i);
-      if (ogTitleMatch) title = ogTitleMatch[1];
-      else if (titleTagMatch) title = titleTagMatch[1].replace(/:\s*Amazon\.in.*$/i, '').trim();
-
-      const ogImageMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
-      if (ogImageMatch) images.push(ogImageMatch[1]);
-
-      const priceMatch = html.match(/class=["']a-price-whole["']>([^<]+)</i);
-      if (priceMatch) {
-        const parsedPrice = parseFloat(priceMatch[1].replace(/,/g, ''));
-        if (!isNaN(parsedPrice) && parsedPrice > 0) {
-          price = parsedPrice;
-        }
-      }
-    } catch (fetchErr) {
-      console.warn('[Amazon Fetch] Metadata scrape warning:', fetchErr.message);
-    }
-
-    if (!title) title = `Amazon Product (ASIN: ${asin})`;
-    if (images.length === 0) {
-      images = [
-        'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80',
-      ];
-    }
-    if (price <= 0) price = 1499.0;
-    originalPrice = Math.round(price * 1.25);
-    discountPercentage = Math.round(((originalPrice - price) / originalPrice) * 100);
-    description = `Premium ${title} imported via Amazon Associates. ASIN: ${asin}. Includes official manufacturer warranty and eligible for Amazon Prime shipping.`;
-
-    const productPreview = {
-      asin,
-      name: title,
-      brand,
-      price,
-      originalPrice,
-      discountPercentage,
-      currency: 'INR',
-      description,
-      images,
-      rating,
-      ratingCount,
-      stock: 99,
-      availability,
-      category: 'electronics',
-      collections: ['best-sellers', 'shop-all'],
-      amazonUrl: cleanAmazonUrl,
-      affiliateUrl,
-      source: 'amazon',
-    };
+    // 2. Fetch High-Fidelity Amazon Product Metadata via amazonService
+    const productPreview = await fetchAmazonProductData(asin);
 
     res.status(200).json({
       success: true,
@@ -551,9 +470,11 @@ const addAmazonProduct = async (req, res, next) => {
       collections,
       images,
       description,
+      features,
       rating,
       ratingCount,
       stock,
+      availability,
       amazonUrl,
       affiliateUrl,
     } = req.body;
@@ -565,9 +486,11 @@ const addAmazonProduct = async (req, res, next) => {
       });
     }
 
-    if (asin && mongoose.connection.readyState === 1) {
+    const finalAsin = extractAsin(asin) || asin;
+
+    if (finalAsin && mongoose.connection.readyState === 1) {
       const existing = await Product.findOne({
-        $or: [{ asin }, { sku: `AZ-${asin}` }],
+        $or: [{ asin: finalAsin }, { sku: `AZ-${finalAsin}` }],
       });
       if (existing) {
         return res.status(400).json({
@@ -580,7 +503,6 @@ const addAmazonProduct = async (req, res, next) => {
     }
 
     const associateTag = process.env.AMAZON_ASSOCIATE_TAG || 'velora004-21';
-    const finalAsin = asin || `B0${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
     const finalAmazonUrl = amazonUrl || `https://www.amazon.in/dp/${finalAsin}`;
     const finalAffiliateUrl =
       affiliateUrl || `${finalAmazonUrl}?tag=${associateTag}`;
@@ -602,21 +524,56 @@ const addAmazonProduct = async (req, res, next) => {
       currency: 'INR',
       category: String(category).toLowerCase().trim(),
       collections: Array.isArray(collections) && collections.length > 0 ? collections : ['shop-all'],
-      images: Array.isArray(images) && images.length > 0 ? images : ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800'],
-      description: description || `Amazon product ASIN ${finalAsin}`,
+      images: Array.isArray(images) && images.length > 0 ? images : [`https://m.media-amazon.com/images/I/${finalAsin}.jpg`],
+      description: description || `${name} - Amazon India catalog item`,
+      features: Array.isArray(features) ? features : [],
       rating: rating ? Number(rating) : 4.5,
       ratingCount: ratingCount ? Number(ratingCount) : 150,
       stock: stock ? Number(stock) : 99,
+      availability: availability || 'In Stock',
       amazonUrl: finalAmazonUrl,
       affiliateUrl: finalAffiliateUrl,
       source: 'amazon',
       isActive: true,
+      amazonLastSyncedAt: new Date(),
     });
 
     res.status(201).json({
       success: true,
       message: 'Amazon product added to Velora catalog successfully!',
       product,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Sync active Amazon products with fresh pricing and availability
+// @route   POST /api/admin/amazon/sync
+// @access  Private/Admin
+const syncAmazonProducts = async (req, res, next) => {
+  try {
+    const { productId } = req.body;
+
+    if (productId && mongoose.connection.readyState === 1) {
+      const product = await Product.findById(productId);
+      if (!product || product.source !== 'amazon') {
+        return res.status(404).json({ success: false, message: 'Amazon product not found.' });
+      }
+      await syncAmazonProduct(product);
+      return res.status(200).json({
+        success: true,
+        message: `Successfully synchronized ${product.name} with Amazon India`,
+        product,
+      });
+    }
+
+    // Batch sync all active Amazon products asynchronously
+    syncAllActiveAmazonProducts().catch((err) => console.error('Batch sync error:', err.message));
+
+    res.status(200).json({
+      success: true,
+      message: 'Amazon catalog synchronization initiated in background.',
     });
   } catch (error) {
     next(error);
@@ -658,5 +615,6 @@ module.exports = {
   updateOrderStatus,
   fetchAmazonProduct,
   addAmazonProduct,
+  syncAmazonProducts,
   toggleProductStatus,
 };

@@ -53,7 +53,20 @@ export const CartPage = () => {
     }
   };
 
-  const finalTotal = Math.max(0, Number((totalAmount - discountAmount).toFixed(2)));
+  const handleProceedToCheckout = () => {
+    const amazonItem = cart.find(
+      (item) => item.product?.source === 'amazon' || item.product?.affiliateUrl || item.product?.amazonUrl
+    );
+    if (amazonItem) {
+      const destUrl = amazonItem.product?.affiliateUrl || amazonItem.product?.amazonUrl;
+      if (destUrl) {
+        toast.info('Redirecting to Amazon India to complete your purchase...');
+        window.open(destUrl, '_blank', 'noopener,noreferrer');
+        return;
+      }
+    }
+    navigate('/checkout');
+  };
 
   if (cart.length === 0) {
     return (
@@ -309,7 +322,7 @@ export const CartPage = () => {
             </div>
 
             <button
-              onClick={() => navigate('/checkout')}
+              onClick={handleProceedToCheckout}
               className="btn btn-primary btn-lg"
               style={{ width: '100%', marginTop: '1.85rem' }}
             >

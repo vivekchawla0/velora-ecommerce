@@ -42,6 +42,7 @@ router.delete('/products/:id', deleteProduct);
 // Amazon Product Affiliate Management
 router.post('/amazon/fetch', fetchAmazonProduct);
 router.post('/amazon/add', addAmazonProduct);
+router.post('/amazon/sync', syncAmazonProducts);
 
 // Order Management
 router.get('/orders', getAllOrders);

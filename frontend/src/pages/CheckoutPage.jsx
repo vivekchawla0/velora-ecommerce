@@ -58,6 +58,18 @@ export const CheckoutPage = () => {
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
 
+    const amazonItem = cart.find(
+      (item) => item.product?.source === 'amazon' || item.product?.affiliateUrl || item.product?.amazonUrl
+    );
+    if (amazonItem) {
+      const destUrl = amazonItem.product?.affiliateUrl || amazonItem.product?.amazonUrl;
+      if (destUrl) {
+        toast.info('Amazon Affiliate items are fulfilled directly on Amazon India. Redirecting...');
+        window.open(destUrl, '_blank', 'noopener,noreferrer');
+        return;
+      }
+    }
+
     if (!isAuthenticated) {
       toast.error('Please sign in or register to place your order.');
       navigate('/login?redirect=/checkout');

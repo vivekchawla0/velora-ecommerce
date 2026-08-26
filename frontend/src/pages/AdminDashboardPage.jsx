@@ -119,6 +119,19 @@ export const AdminDashboardPage = () => {
     }
   };
 
+  const handleSyncAmazonProduct = async (prod) => {
+    try {
+      toast.info(`Syncing ${prod.name} with Amazon India...`);
+      const res = await api.post('/admin/amazon/sync', { productId: prod._id });
+      if (res.data?.success) {
+        toast.success(res.data.message || 'Amazon product refreshed!');
+        loadAdminData();
+      }
+    } catch (err) {
+      toast.error('Failed to sync product with Amazon.');
+    }
+  };
+
   const handleToggleProductStatus = async (prod) => {
     const nextStatus = prod.isActive === false ? true : false;
     try {
@@ -1094,6 +1107,16 @@ export const AdminDashboardPage = () => {
                     <td style={{ padding: '0.75rem' }}>★ {prod.rating?.toFixed(1)}</td>
                     <td style={{ padding: '0.75rem', textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
+                        {isAmazon && (
+                          <button
+                            onClick={() => handleSyncAmazonProduct(prod)}
+                            style={{ color: 'var(--accent)', padding: '4px', background: 'none', border: 'none', cursor: 'pointer' }}
+                            title="Sync live pricing & details with Amazon India"
+                            aria-label="Sync with Amazon India"
+                          >
+                            <RefreshCw size={14} />
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             setEditingProduct(prod);

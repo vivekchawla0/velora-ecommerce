@@ -122,6 +122,25 @@ const productSchema = new mongoose.Schema(
       type: String,
       default: 'INR',
     },
+    features: {
+      type: [String],
+      default: [],
+    },
+    availability: {
+      type: String,
+      default: 'In Stock',
+    },
+    savings: {
+      type: Number,
+      default: 0,
+    },
+    listPrice: {
+      type: Number,
+    },
+    amazonLastSyncedAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
   {
     timestamps: true,
