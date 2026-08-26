@@ -267,21 +267,21 @@ const fetchAmazonProductData = async (asinInput) => {
     const finalName = title || fallbackTitle;
     const finalPrice = price > 0 ? price : 1499;
     const finalOriginalPrice = originalPrice > finalPrice ? originalPrice : Math.round(finalPrice * 1.25);
-    const finalDiscount = Math.round(((finalOriginalPrice - finalName.length) > 0 ? ((finalOriginalPrice - finalPrice) / finalOriginalPrice) * 100 : 25));
+    const finalDiscount = finalOriginalPrice > finalPrice ? Math.round(((finalOriginalPrice - finalPrice) / finalOriginalPrice) * 100) : 0;
 
     return {
       asin,
       name: finalName,
-      brand,
+      brand: brand || 'Amazon',
       price: finalPrice,
       originalPrice: finalOriginalPrice,
-      discountPercentage: finalDiscount > 0 ? finalDiscount : 25,
+      discountPercentage: finalDiscount,
       currency: 'INR',
-      description: features.slice(0, 4).join('. ') || `${finalName} - Official Amazon item metadata.`,
-      features: features.length > 0 ? features.slice(0, 6) : [
+      description: features.length > 0 ? features.join('. ') : `${finalName} - Official Amazon catalog product metadata.`,
+      features: features.length > 0 ? features : [
         'Authentic Amazon verified catalog product',
         'Official manufacturer warranty included',
-        'Fast delivery eligible across India',
+        'Eligible for Fast Delivery',
       ],
       images: imagesArray.length > 0 ? imagesArray : [`https://m.media-amazon.com/images/I/${asin}.jpg`],
       rating,
