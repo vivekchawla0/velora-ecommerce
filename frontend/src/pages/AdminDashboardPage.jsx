@@ -151,10 +151,11 @@ export const AdminDashboardPage = () => {
       };
       const res = await api.post('/admin/amazon/add', payload);
       if (res.data?.success) {
-        toast.success('Amazon product added to Velora catalog!');
+        toast.success(res.data.message || 'Amazon product added to Velora catalog!');
         setAmazonPreview(null);
         setAmazonUrl('');
-        loadAdminData();
+        await loadAdminData();
+        setActiveTab('products');
       }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to save Amazon product.');

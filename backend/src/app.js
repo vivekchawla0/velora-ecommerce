@@ -5,6 +5,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
+const { connectDB } = require('./config/db');
 
 // Route imports
 const authRoutes = require('./routes/authRoutes');
@@ -75,6 +76,17 @@ const authLimiter = rateLimit({
 });
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
+
+// Ensure active MongoDB connection for all incoming API routes (critical for Vercel Serverless Functions)
+app.use('/api', async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error('[DB Middleware Error]', err.message);
+    next();
+  }
+});
 
 // API Route Mounts
 app.use('/api/auth', authRoutes);
