@@ -64,8 +64,52 @@ export const AdminDashboardPage = () => {
   const [amazonPreview, setAmazonPreview] = useState(null);
   const [savingAmazon, setSavingAmazon] = useState(false);
   const [amazonError, setAmazonError] = useState(null);
+  const [newPhotoUrl, setNewPhotoUrl] = useState('');
 
   const toast = useToast();
+
+  // Manual Photo Management Handlers
+  const handleAddPhotoUrl = () => {
+    if (!newPhotoUrl.trim() || !amazonPreview) return;
+    const currentImgs = amazonPreview.images || [];
+    setAmazonPreview({
+      ...amazonPreview,
+      images: [...currentImgs, newPhotoUrl.trim()],
+    });
+    setNewPhotoUrl('');
+    toast.success('Photo URL added to product gallery');
+  };
+
+  const handleRemovePhoto = (indexToRemove) => {
+    if (!amazonPreview) return;
+    const updatedImgs = (amazonPreview.images || []).filter((_, idx) => idx !== indexToRemove);
+    if (updatedImgs.length === 0) {
+      toast.warning('Product should have at least one image.');
+    }
+    setAmazonPreview({
+      ...amazonPreview,
+      images: updatedImgs,
+    });
+    toast.info('Photo removed');
+  };
+
+  const handleImageFileUpload = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0 || !amazonPreview) return;
+
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => {
+        const base64Url = uploadEvent.target.result;
+        setAmazonPreview((prev) => ({
+          ...prev,
+          images: [...(prev?.images || []), base64Url],
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+    toast.success(`${files.length} photo(s) uploaded successfully!`);
+  };
 
   const handleFetchAmazonProduct = async (e) => {
     if (e) e.preventDefault();
@@ -590,7 +634,7 @@ export const AdminDashboardPage = () => {
             <div className="card-panel" style={{ padding: '2rem', border: '2px solid var(--accent)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
                 <span className="badge badge-curated" style={{ fontSize: '0.8rem' }}>
-                  Product Preview (Source: Amazon Affiliate)
+                  Product Preview & Importer Configuration
                 </span>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                   ASIN: <strong>{amazonPreview.asin}</strong>
@@ -603,40 +647,151 @@ export const AdminDashboardPage = () => {
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: '2rem', marginBottom: '2rem' }} className="amazon-preview-grid">
-                <div style={{ background: '#FFFFFF', padding: '1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <img
-                    src={amazonPreview.images?.[0]}
-                    alt={amazonPreview.name}
-                    style={{ maxWidth: '100%', maxHeight: '180px', objectFit: 'contain' }}
-                  />
+              {/* Complete Title Editor */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label className="input-label" style={{ fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Complete Official Product Title
+                </label>
+                <textarea
+                  rows={2}
+                  value={amazonPreview.name || ''}
+                  onChange={(e) => setAmazonPreview({ ...amazonPreview, name: e.target.value })}
+                  className="input-field"
+                  style={{ fontSize: '0.95rem', fontWeight: 700, lineHeight: 1.4 }}
+                />
+              </div>
+
+              {/* Manual Product Photos Upload & Gallery Manager */}
+              <div style={{ marginBottom: '2rem', padding: '1.25rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                  <div>
+                    <h4 style={{ fontSize: '0.95rem', fontWeight: 800, marginBottom: '0.2rem' }}>
+                      Product Photos ({amazonPreview.images?.length || 0})
+                    </h4>
+                    <p style={{ fontSize: '0.785rem', color: 'var(--text-secondary)' }}>
+                      Manage product gallery photos. The first photo is automatically used as the primary display image.
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <Plus size={14} /> Upload File
+                      <input type="file" accept="image/*" multiple hidden onChange={handleImageFileUpload} />
+                    </label>
+                  </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
-                    {amazonPreview.brand || 'Amazon'}
-                  </span>
-                  <h3 style={{ fontSize: '1.35rem', fontWeight: 800, lineHeight: 1.3 }}>{amazonPreview.name}</h3>
+                {/* Add Photo URL Input Bar */}
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                  <input
+                    type="url"
+                    value={newPhotoUrl}
+                    onChange={(e) => setNewPhotoUrl(e.target.value)}
+                    placeholder="Paste image URL (e.g. https://...)"
+                    className="input-field"
+                    style={{ fontSize: '0.835rem', height: '36px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddPhotoUrl}
+                    className="btn btn-secondary btn-sm"
+                    style={{ height: '36px', whiteSpace: 'nowrap' }}
+                  >
+                    Add URL
+                  </button>
+                </div>
 
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
-                    <span style={{ fontSize: '1.6rem', fontWeight: 850 }}>₹{amazonPreview.price?.toLocaleString('en-IN')}</span>
-                    {amazonPreview.originalPrice > amazonPreview.price && (
-                      <span style={{ fontSize: '1rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
-                        ₹{amazonPreview.originalPrice?.toLocaleString('en-IN')}
-                      </span>
-                    )}
-                    <span className="badge badge-success">★ {amazonPreview.rating} ({amazonPreview.ratingCount} reviews)</span>
-                  </div>
+                {/* Photo Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '1rem' }}>
+                  {(amazonPreview.images || []).map((imgUrl, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        position: 'relative',
+                        background: '#FFFFFF',
+                        border: idx === 0 ? '2px solid var(--accent)' : '1px solid var(--border)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '0.5rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {idx === 0 && (
+                        <span
+                          style={{
+                            position: 'absolute',
+                            top: '4px',
+                            left: '4px',
+                            background: 'var(--accent)',
+                            color: '#FFFFFF',
+                            fontSize: '0.625rem',
+                            fontWeight: 800,
+                            padding: '2px 5px',
+                            borderRadius: '3px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}
+                        >
+                          Primary
+                        </span>
+                      )}
+                      <img
+                        src={imgUrl}
+                        alt={`Product photo ${idx + 1}`}
+                        style={{ width: '100%', height: '90px', objectFit: 'contain', marginBottom: '0.4rem' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePhoto(idx)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#DC2626',
+                          cursor: 'pointer',
+                          padding: '2px',
+                          fontSize: '0.75rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.2rem',
+                          fontWeight: 650,
+                        }}
+                      >
+                        <Trash2 size={12} /> Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.5 }}>
-                    {amazonPreview.description}
-                  </p>
-
-                  <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                    <span>Department: <strong style={{ color: 'var(--text-primary)', textTransform: 'capitalize' }}>{amazonDept}</strong></span>
-                    <span>•</span>
-                    <span>Collection: <strong style={{ color: 'var(--text-primary)', textTransform: 'capitalize' }}>{amazonColl}</strong></span>
-                  </div>
+              {/* Product Pricing & Specs Details */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div>
+                  <label className="input-label" style={{ fontSize: '0.785rem', fontWeight: 700 }}>Selling Price (₹)</label>
+                  <input
+                    type="number"
+                    value={amazonPreview.price || ''}
+                    onChange={(e) => setAmazonPreview({ ...amazonPreview, price: Number(e.target.value) })}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="input-label" style={{ fontSize: '0.785rem', fontWeight: 700 }}>Original List Price (₹)</label>
+                  <input
+                    type="number"
+                    value={amazonPreview.originalPrice || ''}
+                    onChange={(e) => setAmazonPreview({ ...amazonPreview, originalPrice: Number(e.target.value) })}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="input-label" style={{ fontSize: '0.785rem', fontWeight: 700 }}>Brand</label>
+                  <input
+                    type="text"
+                    value={amazonPreview.brand || 'Amazon'}
+                    onChange={(e) => setAmazonPreview({ ...amazonPreview, brand: e.target.value })}
+                    className="input-field"
+                  />
                 </div>
               </div>
 
