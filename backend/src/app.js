@@ -62,19 +62,33 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
 
-// Rate limiting for auth endpoints (prevent brute force)
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-  message: {
-    success: false,
-    message: 'Too many login/register attempts, please try again after 15 minutes.',
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
+const { connectDB } = require('./config/db');
+
+// Connect database middleware
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+  } catch (err) {
+    console.warn('[App DB Middleware Notice]:', err.message);
+  }
+  next();
 });
-app.use('/api/auth/login', authLimiter);
-app.use('/api/auth/register', authLimiter);
+
+// Rate limiting for auth endpoints (only in non-serverless environments)
+if (!process.env.VERCEL) {
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: {
+      success: false,
+      message: 'Too many login/register attempts, please try again after 15 minutes.',
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  app.use('/api/auth/login', authLimiter);
+  app.use('/api/auth/register', authLimiter);
+}
 
 // API Route Mounts
 app.use('/api/auth', authRoutes);
