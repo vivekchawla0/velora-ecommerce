@@ -764,26 +764,34 @@ export const AdminDashboardPage = () => {
                 </div>
               </div>
 
-              {/* Product Pricing & Specs Details */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
-                <div>
-                  <label className="input-label" style={{ fontSize: '0.785rem', fontWeight: 700 }}>Selling Price (₹)</label>
-                  <input
-                    type="number"
-                    value={amazonPreview.price || ''}
-                    onChange={(e) => setAmazonPreview({ ...amazonPreview, price: Number(e.target.value) })}
-                    className="input-field"
-                  />
+              {/* Read-Only Amazon Scraped Price Banner & Brand */}
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem', marginBottom: '1.5rem', alignItems: 'center' }}>
+                <div style={{ padding: '1rem 1.25rem', background: '#F8FAFC', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+                    <span style={{ fontSize: '0.725rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
+                      Scraped Amazon Link Price (Read-Only)
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: '#15803D', fontWeight: 700 }}>
+                      ✓ Fetched directly from link
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.85rem' }}>
+                    <span style={{ fontSize: '1.65rem', fontWeight: 850, color: 'var(--text-primary)' }}>
+                      ₹{amazonPreview.price?.toLocaleString('en-IN')}
+                    </span>
+                    {amazonPreview.originalPrice > amazonPreview.price && (
+                      <span style={{ fontSize: '1.05rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+                        ₹{amazonPreview.originalPrice?.toLocaleString('en-IN')}
+                      </span>
+                    )}
+                    {amazonPreview.discountPercentage > 0 && (
+                      <span className="badge badge-success">
+                        Save {amazonPreview.discountPercentage}%
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <label className="input-label" style={{ fontSize: '0.785rem', fontWeight: 700 }}>Original List Price (₹)</label>
-                  <input
-                    type="number"
-                    value={amazonPreview.originalPrice || ''}
-                    onChange={(e) => setAmazonPreview({ ...amazonPreview, originalPrice: Number(e.target.value) })}
-                    className="input-field"
-                  />
-                </div>
+
                 <div>
                   <label className="input-label" style={{ fontSize: '0.785rem', fontWeight: 700 }}>Brand</label>
                   <input

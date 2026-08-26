@@ -51,6 +51,21 @@ const extractTitleFromUrl = (url) => {
 };
 
 /**
+ * Clean HTML entity characters from scraped title strings
+ */
+const unescapeHtml = (str) => {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .trim();
+};
+
+/**
  * Clean Amazon Image URL to obtain full high-resolution original image
  */
 const cleanAmazonImageUrl = (rawUrl) => {
@@ -109,14 +124,14 @@ const fetchAmazonProductData = async (asinInput) => {
 
       if (response.data?.ItemsResult?.Items?.[0]) {
         const item = response.data.ItemsResult.Items[0];
-        const title = item.ItemInfo?.Title?.DisplayValue || `Amazon Item (${asin})`;
-        const brand = item.ItemInfo?.ByLineInfo?.Brand?.DisplayValue || 'Amazon';
+        const title = unescapeHtml(item.ItemInfo?.Title?.DisplayValue || `Amazon Item (${asin})`);
+        const brand = unescapeHtml(item.ItemInfo?.ByLineInfo?.Brand?.DisplayValue || 'Amazon');
         const primaryImg = item.Images?.Primary?.Large?.URL;
         const variantImgs = (item.Images?.Variants || []).map((v) => v.Large?.URL).filter(Boolean);
         const images = Array.from(new Set([primaryImg, ...variantImgs])).filter(Boolean);
         const priceAmount = item.Offers?.Listings?.[0]?.Price?.Amount || 0;
         const listAmount = item.Offers?.Listings?.[0]?.SavingBasis?.Amount || priceAmount;
-        const features = item.ItemInfo?.Features?.DisplayValues || [];
+        const features = (item.ItemInfo?.Features?.DisplayValues || []).map(unescapeHtml);
 
         return {
           asin,
@@ -165,17 +180,19 @@ const fetchAmazonProductData = async (asinInput) => {
     }
 
     // Extract Title
-    let title = '';
+    let rawTitle = '';
     const titleMatch = html.match(/id=["']productTitle["'][^>]*>\s*([^<]+)\s*</i);
     const ogTitleMatch = html.match(/meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i);
-    if (titleMatch) title = titleMatch[1].trim();
-    else if (ogTitleMatch) title = ogTitleMatch[1].replace(/:\s*Amazon\.[a-z.]*$/i, '').trim();
+    if (titleMatch) rawTitle = titleMatch[1].trim();
+    else if (ogTitleMatch) rawTitle = ogTitleMatch[1].replace(/:\s*Amazon\.[a-z.]*$/i, '').trim();
+
+    const title = unescapeHtml(rawTitle);
 
     // Extract Brand
     let brand = 'Amazon';
     const brandMatch = html.match(/id=["']bylineInfo["'][^>]*>\s*Brand:\s*([^<]+)\s*</i) ||
       html.match(/class=["']po-brand["'][^>]*>[\s\S]*?class=["']a-span9["'][^>]*>\s*<span[^>]*>([^<]+)</i);
-    if (brandMatch) brand = brandMatch[1].replace(/^Visit the\s+/i, '').replace(/\s+Store$/i, '').trim();
+    if (brandMatch) brand = unescapeHtml(brandMatch[1].replace(/^Visit the\s+/i, '').replace(/\s+Store$/i, '').trim());
 
     // Extract Product Images
     const imageSet = new Set();
@@ -226,6 +243,15 @@ const fetchAmazonProductData = async (asinInput) => {
       if (!isNaN(parsedBasis) && parsedBasis > price) {
         originalPrice = parsedBasis;
       }
+    }
+
+    // Handle USD to INR conversion if link was amazon.com
+    const isAmazonCom = targetUrl.includes('amazon.com');
+    if (isAmazonCom && price > 0 && price < 300) {
+      price = Math.round(price * 83);
+    }
+    if (isAmazonCom && originalPrice > 0 && originalPrice < 400) {
+      originalPrice = Math.round(originalPrice * 83);
     }
 
     if (!originalPrice || originalPrice <= price) {
