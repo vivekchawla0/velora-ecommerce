@@ -27,24 +27,28 @@ const connectDB = async () => {
       }
     }
 
-    // 2. Attempt connecting to local MongoDB URI
-    const localUri = process.env.LOCAL_MONGO_URI || 'mongodb://127.0.0.1:27017/velora';
-    try {
-      const conn = await mongoose.connect(localUri, {
-        serverSelectionTimeoutMS: 2000,
-      });
-      console.log(`[Database] Local MongoDB Connected: ${conn.connection.host} (${conn.connection.name})`);
-      return conn;
-    } catch (primaryErr) {
-      console.log(`[Database] Local MongoDB not detected. Starting In-Memory MongoDB Server...`);
-      const { MongoMemoryServer } = require('mongodb-memory-server');
-      mongoMemoryServer = await MongoMemoryServer.create({
-        downloadDir: process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME ? '/tmp' : undefined,
-      });
-      const memoryUri = mongoMemoryServer.getUri();
-      const conn = await mongoose.connect(memoryUri);
-      console.log(`[Database] In-Memory MongoDB running at: ${memoryUri}`);
-      return conn;
+    // 2. Attempt connecting to local MongoDB URI (Development mode only)
+    const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+    if (!isServerless) {
+      const localUri = process.env.LOCAL_MONGO_URI || 'mongodb://127.0.0.1:27017/velora';
+      try {
+        const conn = await mongoose.connect(localUri, {
+          serverSelectionTimeoutMS: 2000,
+        });
+        console.log(`[Database] Local MongoDB Connected: ${conn.connection.host} (${conn.connection.name})`);
+        return conn;
+      } catch (primaryErr) {
+        console.log(`[Database] Local MongoDB not detected. Starting In-Memory MongoDB Server...`);
+        const { MongoMemoryServer } = require('mongodb-memory-server');
+        mongoMemoryServer = await MongoMemoryServer.create();
+        const memoryUri = mongoMemoryServer.getUri();
+        const conn = await mongoose.connect(memoryUri);
+        console.log(`[Database] In-Memory MongoDB running at: ${memoryUri}`);
+        return conn;
+      }
+    } else {
+      console.warn('[Database] Running on Vercel Serverless environment. MONGO_URI checked.');
+      return mongoose.connection;
     }
   } catch (error) {
     console.error(`[Database Error] Connection error: ${error.message}`);
