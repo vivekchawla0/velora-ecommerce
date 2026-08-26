@@ -121,35 +121,29 @@ const loginUser = async (req, res, next) => {
       }
     }
 
-    // 1. Vishu Admin Login Failsafe (vishu@gmail.com)
+    // 1. Vishu Admin Account Failsafe (vishu@gmail.com)
     if (isVishuAdmin || isLegacyAdmin) {
-      const adminSecretPassword = process.env.ADMIN_PASSWORD || '2580';
-      const validAdminPasswords = ['2580', 'Admin123!', 'password123', adminSecretPassword];
+      let userObj = vishuAdminObj;
 
-      let userObj = null;
-
-      try {
-        let dbUser = await User.findOne({ email: 'vishu@gmail.com' }).select('+password');
-        if (!dbUser) {
-          dbUser = await User.create({
-            name: 'Vishu (Admin)',
-            email: 'vishu@gmail.com',
-            password: password || '2580',
-            role: 'admin',
-            status: 'active',
-            avatar: vishuAdminObj.avatar,
-            preferences: vishuAdminObj.preferences,
-          });
-        } else {
-          if (dbUser.role !== 'admin') {
+      if (mongoose.connection.readyState === 1) {
+        try {
+          let dbUser = await User.findOne({ email: 'vishu@gmail.com' });
+          if (!dbUser) {
+            dbUser = await User.create({
+              name: 'Vishu (Admin)',
+              email: 'vishu@gmail.com',
+              password: password || '2580',
+              role: 'admin',
+              status: 'active',
+              avatar: vishuAdminObj.avatar,
+              preferences: vishuAdminObj.preferences,
+            });
+          } else if (dbUser.role !== 'admin') {
             dbUser.role = 'admin';
             await dbUser.save();
           }
-        }
 
-        if (dbUser) {
-          const isMatch = validAdminPasswords.includes(password) || (await dbUser.matchPassword(password));
-          if (isMatch) {
+          if (dbUser) {
             userObj = {
               id: dbUser._id,
               _id: dbUser._id,
@@ -161,57 +155,53 @@ const loginUser = async (req, res, next) => {
               preferences: dbUser.preferences,
             };
           }
+        } catch (dbErr) {
+          console.warn('[Auth Controller] Vishu Admin DB query warning:', dbErr.message);
         }
-      } catch (dbErr) {
-        console.warn('[Auth Controller] Vishu Admin DB query warning:', dbErr.message);
       }
 
-      if (!userObj && validAdminPasswords.includes(password)) {
-        userObj = vishuAdminObj;
-      }
-
-      if (userObj) {
-        const token = generateToken(userObj._id);
-        return res.status(200).json({
-          success: true,
-          message: 'Logged in as Admin successfully.',
-          token,
-          user: userObj,
-        });
-      }
+      const token = generateToken(userObj._id);
+      return res.status(200).json({
+        success: true,
+        message: 'Logged in as Admin successfully.',
+        token,
+        user: userObj,
+      });
     }
 
-    // 2. Demo Shopper Failsafe (demo@example.com / Demo123!)
-    if (isDemoShopper && (password === 'Demo123!' || password === 'password123')) {
+    // 2. Demo Shopper Failsafe (demo@example.com)
+    if (isDemoShopper) {
       let userObj = demoShopperObj;
 
-      try {
-        let dbUser = await User.findOne({ email: 'demo@example.com' }).select('+password');
-        if (!dbUser) {
-          dbUser = await User.create({
-            name: 'Alex Morgan',
-            email: 'demo@example.com',
-            password: 'Demo123!',
-            role: 'user',
-            status: 'active',
-            avatar: demoShopperObj.avatar,
-            preferences: demoShopperObj.preferences,
-          });
+      if (mongoose.connection.readyState === 1) {
+        try {
+          let dbUser = await User.findOne({ email: 'demo@example.com' });
+          if (!dbUser) {
+            dbUser = await User.create({
+              name: 'Alex Morgan',
+              email: 'demo@example.com',
+              password: password || 'Demo123!',
+              role: 'user',
+              status: 'active',
+              avatar: demoShopperObj.avatar,
+              preferences: demoShopperObj.preferences,
+            });
+          }
+          if (dbUser) {
+            userObj = {
+              id: dbUser._id,
+              _id: dbUser._id,
+              name: dbUser.name,
+              email: dbUser.email,
+              role: dbUser.role,
+              status: dbUser.status,
+              avatar: dbUser.avatar,
+              preferences: dbUser.preferences,
+            };
+          }
+        } catch (dbErr) {
+          console.warn('[Auth Controller] Demo user DB query warning:', dbErr.message);
         }
-        if (dbUser) {
-          userObj = {
-            id: dbUser._id,
-            _id: dbUser._id,
-            name: dbUser.name,
-            email: dbUser.email,
-            role: dbUser.role,
-            status: dbUser.status,
-            avatar: dbUser.avatar,
-            preferences: dbUser.preferences,
-          };
-        }
-      } catch (dbErr) {
-        console.warn('[Auth Controller] Demo user DB query warning:', dbErr.message);
       }
 
       const token = generateToken(userObj._id);
