@@ -59,7 +59,7 @@ const getPersonalizedRecommendations = async (userId, limit = 10, excludeProduct
         .filter((id) => mongoose.Types.ObjectId.isValid(id) && !excludeSet.has(id.toString()));
 
       if (validObjectIds.length > 0) {
-        const products = await Product.find({ _id: { $in: validObjectIds } }).lean();
+        const products = await Product.find({ _id: { $in: validObjectIds }, isActive: { $ne: false } }).lean();
 
         // Map into sorted order with score and explainability reason
         const productMap = new Map(products.map((p) => [p._id.toString(), p]));
@@ -136,7 +136,7 @@ const getSimilarProducts = async (productId, limit = 6) => {
             .filter((id) => mongoose.Types.ObjectId.isValid(id));
 
           if (validIds.length > 0) {
-            const products = await Product.find({ _id: { $in: validIds } }).lean();
+            const products = await Product.find({ _id: { $in: validIds }, isActive: { $ne: false } }).lean();
             const productMap = new Map(products.map((p) => [p._id.toString(), p]));
 
             const enriched = response.data.recommendations
@@ -166,10 +166,11 @@ const getSimilarProducts = async (productId, limit = 6) => {
     let similar = [];
     if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(productId)) {
       try {
-        const baseProduct = await Product.findById(productId);
+        const baseProduct = await Product.findOne({ _id: productId, isActive: { $ne: false } });
         if (baseProduct) {
           similar = await Product.find({
             _id: { $ne: baseProduct._id },
+            isActive: { $ne: false },
             $or: [{ category: baseProduct.category }, { brand: baseProduct.brand }],
           })
             .sort({ rating: -1, ratingCount: -1 })
@@ -231,6 +232,7 @@ const getSimilarProducts = async (productId, limit = 6) => {
  * Intelligent cold-start aggregator using interaction weight counts + Bayesian ratings
  */
 const getColdStartTrendingProducts = async (limit = 10, excludeProductIds = []) => {
+  const isDemoMode = (process.env.PRODUCT_DATA_MODE || 'amazon').toLowerCase() === 'demo';
   const exSet = new Set((excludeProductIds || []).map((id) => String(id)));
 
   let dbProducts = [];
@@ -240,7 +242,7 @@ const getColdStartTrendingProducts = async (limit = 10, excludeProductIds = []) 
         .filter((id) => mongoose.Types.ObjectId.isValid(id))
         .map((id) => new mongoose.Types.ObjectId(id));
 
-      const query = { stock: { $gt: 0 } };
+      const query = { stock: { $gt: 0 }, isActive: { $ne: false } };
       if (validExcludedObjectIds.length > 0) {
         query._id = { $nin: validExcludedObjectIds };
       }
@@ -254,10 +256,9 @@ const getColdStartTrendingProducts = async (limit = 10, excludeProductIds = []) 
     }
   }
 
-  // Combine DB products with 219 fallback catalog items
-  let combined = [...fallbackProducts];
-  if (dbProducts && dbProducts.length > 0) {
-    combined = [...dbProducts, ...fallbackProducts];
+  let combined = dbProducts || [];
+  if (isDemoMode && (!dbProducts || dbProducts.length === 0)) {
+    combined = [...fallbackProducts];
   }
 
   // Deduplicate and filter out excluded products
@@ -274,7 +275,7 @@ const getColdStartTrendingProducts = async (limit = 10, excludeProductIds = []) 
   // Sort by rating & featured status
   filtered.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || (b.rating || 0) - (a.rating || 0));
 
-  const finalItems = (filtered.length >= limit ? filtered : combined).slice(0, limit);
+  const finalItems = filtered.slice(0, limit);
 
   return finalItems.map((p) => ({
     ...p,

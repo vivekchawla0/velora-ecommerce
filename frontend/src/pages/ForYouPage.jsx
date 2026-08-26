@@ -68,7 +68,7 @@ export const ForYouPage = () => {
 
       // 2. Fetch Trending / Popular Bestsellers
       try {
-        const trendRes = await api.get('/products', { params: { sort: 'popular', limit: 8 } });
+        const trendRes = await api.get('/products', { params: { collection: 'trending', limit: 8 } });
         if (trendRes.data?.products) {
           setTrendingProducts(trendRes.data.products);
         }

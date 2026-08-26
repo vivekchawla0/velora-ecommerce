@@ -18,6 +18,7 @@ export const AdminProductModal = ({ isOpen, onClose, product = null, onSaved }) 
     images: '',
     tags: '',
     featured: false,
+    collections: ['shop-all'],
   });
 
   const [submitting, setSubmitting] = useState(false);
@@ -35,6 +36,7 @@ export const AdminProductModal = ({ isOpen, onClose, product = null, onSaved }) 
         images: Array.isArray(product.images) ? product.images.join(', ') : '',
         tags: Array.isArray(product.tags) ? product.tags.join(', ') : '',
         featured: Boolean(product.featured),
+        collections: Array.isArray(product.collections) && product.collections.length > 0 ? product.collections : ['shop-all'],
       });
     } else {
       setFormData({
@@ -48,11 +50,21 @@ export const AdminProductModal = ({ isOpen, onClose, product = null, onSaved }) 
         images: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800',
         tags: 'premium, new',
         featured: false,
+        collections: ['best-sellers', 'shop-all'],
       });
     }
   }, [product, isOpen]);
 
   if (!isOpen) return null;
+
+  const handleCollectionToggle = (colKey) => {
+    const currentCols = [...formData.collections];
+    if (currentCols.includes(colKey)) {
+      setFormData({ ...formData, collections: currentCols.filter((c) => c !== colKey) });
+    } else {
+      setFormData({ ...formData, collections: [...currentCols, colKey] });
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -76,6 +88,7 @@ export const AdminProductModal = ({ isOpen, onClose, product = null, onSaved }) 
           .map((s) => s.trim())
           .filter(Boolean),
         featured: formData.featured,
+        collections: formData.collections.length > 0 ? formData.collections : ['shop-all'],
       };
 
       if (isEditing) {
@@ -260,6 +273,30 @@ export const AdminProductModal = ({ isOpen, onClose, product = null, onSaved }) 
               className="input-field"
               placeholder="Detailed technical and design specifications..."
             />
+          </div>
+
+          <div className="input-group" style={{ marginBottom: '1.25rem' }}>
+            <label className="input-label" style={{ fontWeight: 750 }}>Assigned Store Sections / Collections</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.65rem', marginTop: '0.35rem' }}>
+              {[
+                { id: 'new-arrivals', label: 'New Arrivals' },
+                { id: 'best-sellers', label: 'Best Sellers' },
+                { id: 'trending', label: 'Trending' },
+                { id: 'offers', label: 'Limited-Time Offers' },
+                { id: 'featured', label: 'Featured' },
+                { id: 'shop-all', label: 'Shop All' },
+              ].map((col) => (
+                <label key={col.id} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.825rem', fontWeight: 600, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.collections.includes(col.id)}
+                    onChange={() => handleCollectionToggle(col.id)}
+                    style={{ width: '15px', height: '15px', accentColor: 'var(--accent)' }}
+                  />
+                  <span>{col.label}</span>
+                </label>
+              ))}
+            </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0 1.5rem' }}>

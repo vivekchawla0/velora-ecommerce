@@ -26,25 +26,31 @@ export const ProductsPage = () => {
   // Filters State from URL query parameters
   const searchQuery = searchParams.get('q') || '';
   const selectedCategory = searchParams.get('category') || '';
+  const selectedCollection = searchParams.get('collection') || searchParams.get('section') || '';
   const sortBy = searchParams.get('sort') || 'newest';
   const minPrice = searchParams.get('minPrice') || '';
   const maxPrice = searchParams.get('maxPrice') || '';
   const minRating = searchParams.get('minRating') || '';
   const page = parseInt(searchParams.get('page') || '1', 10);
 
-  // Load Categories on mount
+  // Determine active collection context
+  const activeCollection = selectedCollection || (sortBy === 'newest' && !searchQuery && !selectedCategory ? 'new-arrivals' : (sortBy === 'popular' ? 'best-sellers' : ''));
+
+  // Load Categories whenever activeCollection changes so counts match current section
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const res = await api.get('/products/categories');
+        const res = await api.get('/products/categories', {
+          params: { collection: activeCollection },
+        });
         const list = Array.isArray(res.data) ? res.data : res.data?.categories || res.data?.data || [];
-        if (list && list.length > 0) setCategories(list);
+        if (list) setCategories(list);
       } catch (err) {
         console.warn('Error loading categories:', err.message);
       }
     };
     fetchCategories();
-  }, []);
+  }, [activeCollection]);
 
   // Fetch Products whenever filters change
   useEffect(() => {
@@ -59,6 +65,7 @@ export const ProductsPage = () => {
 
         if (searchQuery) params.q = searchQuery;
         if (selectedCategory) params.category = selectedCategory;
+        if (activeCollection) params.collection = activeCollection;
         if (minPrice) params.minPrice = minPrice;
         if (maxPrice) params.maxPrice = maxPrice;
         if (minRating) params.minRating = minRating;

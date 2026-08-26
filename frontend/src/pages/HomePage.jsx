@@ -21,18 +21,14 @@ export const HomePage = () => {
     const loadHomeData = async () => {
       try {
         const [bestRes, newRes, trendRes] = await Promise.all([
-          api.get('/products', { params: { sort: 'popular', limit: 8 } }),
-          api.get('/products', { params: { sort: 'newest', limit: 8 } }),
-          api.get('/products/featured', { params: { limit: 8 } }).catch(() => ({ data: { products: [] } })),
+          api.get('/products', { params: { collection: 'best-sellers', limit: 8 } }),
+          api.get('/products', { params: { collection: 'new-arrivals', limit: 8 } }),
+          api.get('/products', { params: { collection: 'trending', limit: 8 } }),
         ]);
 
         if (bestRes.data?.products) setBestSellers(bestRes.data.products);
         if (newRes.data?.products) setNewArrivals(newRes.data.products);
-        if (trendRes.data?.products && trendRes.data.products.length > 0) {
-          setTrendingProducts(trendRes.data.products);
-        } else if (bestRes.data?.products) {
-          setTrendingProducts(bestRes.data.products.slice(4));
-        }
+        if (trendRes.data?.products) setTrendingProducts(trendRes.data.products);
       } catch (err) {
         console.warn('Error loading homepage catalog data:', err.message);
       } finally {

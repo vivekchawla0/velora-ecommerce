@@ -22,6 +22,7 @@ fallbackProducts.forEach((p) => {
 });
 
 // @desc    Get all products with filtering, search, sorting & pagination
+// @desc    Get all products with filtering, search, sorting & pagination
 // @route   GET /api/products
 // @access  Public
 const getProducts = async (req, res, next) => {
@@ -29,6 +30,8 @@ const getProducts = async (req, res, next) => {
     const {
       q,
       category,
+      collection,
+      section,
       brand,
       minPrice,
       maxPrice,
@@ -61,6 +64,18 @@ const getProducts = async (req, res, next) => {
 
         if (category && category !== 'all') {
           query.category = { $regex: new RegExp(`^${category}$`, 'i') };
+        }
+
+        const collectionKey = (collection || section || '').toLowerCase().trim();
+        if (collectionKey && collectionKey !== 'all' && collectionKey !== 'shop-all') {
+          if (collectionKey === 'offers' || collectionKey === 'discount' || collectionKey === 'promotions') {
+            query.$or = [
+              { collections: { $in: [/offers/i, /discount/i, /trending-selections/i] } },
+              { discountPercentage: { $gt: 0 } },
+            ];
+          } else {
+            query.collections = { $in: [new RegExp(`^${collectionKey}$`, 'i')] };
+          }
         }
 
         if (brand && brand !== 'all') {
@@ -129,6 +144,14 @@ const getProducts = async (req, res, next) => {
         );
       }
 
+      const collectionKey = (collection || section || '').toLowerCase().trim();
+      if (collectionKey && collectionKey !== 'all' && collectionKey !== 'shop-all') {
+        filtered = filtered.filter((p) => {
+          const cols = (p.collections || []).map((c) => c.toLowerCase());
+          return cols.includes(collectionKey) || p.featured;
+        });
+      }
+
       if (brand && brand !== 'all') {
         filtered = filtered.filter((p) => p.brand?.toLowerCase() === brand.toLowerCase());
       }
@@ -157,13 +180,13 @@ const getProducts = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      count: products.length,
-      total,
-      totalProducts: total,
+      count: products ? products.length : 0,
+      total: total || 0,
+      totalProducts: total || 0,
       page: pageNum,
       totalPages,
       hasMore: pageNum < totalPages,
-      products,
+      products: products || [],
     });
   } catch (error) {
     next(error);
@@ -181,11 +204,12 @@ const getProductById = async (req, res, next) => {
     if (mongoose.connection.readyState === 1) {
       try {
         if (mongoose.Types.ObjectId.isValid(targetId)) {
-          product = await Product.findById(targetId).lean();
+          product = await Product.findOne({ _id: targetId, isActive: { $ne: false } }).lean();
         }
         if (!product) {
           product = await Product.findOne({
             $or: [{ sku: targetId }, { slug: targetId }],
+            isActive: { $ne: false },
           }).lean();
         }
       } catch (err) {
@@ -220,11 +244,15 @@ const getProductById = async (req, res, next) => {
   }
 };
 
-// @desc    Get all categories with product counts
+// @desc    Get all categories with product counts filtered by section/collection
 // @route   GET /api/products/categories
 // @access  Public
 const getCategories = async (req, res, next) => {
   try {
+    const isDemoMode = (process.env.PRODUCT_DATA_MODE || 'amazon').toLowerCase() === 'demo';
+    const { collection, section } = req.query;
+    const collectionKey = (collection || section || '').toLowerCase().trim();
+
     let categories = [];
     try {
       categories = await Category.find().lean();
@@ -236,13 +264,28 @@ const getCategories = async (req, res, next) => {
       categories = fallbackCategories;
     }
 
+    const matchStage = { isActive: { $ne: false } };
+    if (collectionKey && collectionKey !== 'all' && collectionKey !== 'shop-all') {
+      if (collectionKey === 'offers' || collectionKey === 'discount' || collectionKey === 'promotions') {
+        matchStage.$or = [
+          { collections: { $in: [/offers/i, /discount/i, /trending-selections/i] } },
+          { discountPercentage: { $gt: 0 } },
+        ];
+      } else {
+        matchStage.collections = { $in: [new RegExp(`^${collectionKey}$`, 'i')] };
+      }
+    }
+
     let counts = [];
-    try {
-      counts = await Product.aggregate([
-        { $group: { _id: '$category', count: { $sum: 1 } } },
-      ]);
-    } catch (err) {
-      // Ignore DB aggregation error
+    if (mongoose.connection.readyState === 1) {
+      try {
+        counts = await Product.aggregate([
+          { $match: matchStage },
+          { $group: { _id: '$category', count: { $sum: 1 } } },
+        ]);
+      } catch (err) {
+        // Ignore DB aggregation error
+      }
     }
 
     const countMap = new Map(
@@ -252,12 +295,11 @@ const getCategories = async (req, res, next) => {
     const enrichedCategories = categories.map((cat) => {
       const slugKey = (cat.slug || '').toLowerCase();
       const nameKey = (cat.name || '').toLowerCase();
-      const count =
-        countMap.get(slugKey) ||
-        countMap.get(nameKey) ||
-        fallbackCountMap.get(slugKey) ||
-        fallbackCountMap.get(nameKey) ||
-        0;
+      let count = countMap.get(slugKey) || countMap.get(nameKey) || 0;
+
+      if (isDemoMode && counts.length === 0 && (!collectionKey || collectionKey === 'all')) {
+        count = fallbackCountMap.get(slugKey) || fallbackCountMap.get(nameKey) || 0;
+      }
 
       return {
         ...cat,
@@ -280,24 +322,31 @@ const getCategories = async (req, res, next) => {
 // @access  Public
 const getFeaturedProducts = async (req, res, next) => {
   try {
+    const isDemoMode = (process.env.PRODUCT_DATA_MODE || 'amazon').toLowerCase() === 'demo';
     let featured = [];
-    try {
-      featured = await Product.find({ featured: true })
-        .sort({ rating: -1 })
-        .limit(8)
-        .lean();
-    } catch (err) {
-      console.warn('[Featured Controller] DB query error:', err.message);
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        featured = await Product.find({
+          isActive: { $ne: false },
+          $or: [{ featured: true }, { collections: { $in: [/featured/i, /trending/i] } }],
+        })
+          .sort({ rating: -1, ratingCount: -1 })
+          .limit(8)
+          .lean();
+      } catch (err) {
+        console.warn('[Featured Controller] DB query error:', err.message);
+      }
     }
 
-    if (!featured || featured.length === 0) {
+    if (isDemoMode && (!featured || featured.length === 0)) {
       featured = fallbackProducts.filter((p) => p.featured).slice(0, 8);
     }
 
     res.status(200).json({
       success: true,
-      count: featured.length,
-      products: featured,
+      count: featured ? featured.length : 0,
+      products: featured || [],
     });
   } catch (error) {
     next(error);

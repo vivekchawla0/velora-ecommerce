@@ -45,21 +45,23 @@ const formatPopulatedCart = async (cart) => {
     };
   });
 
-  const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
-  const subtotal = Number(items.reduce((sum, i) => sum + i.itemTotal, 0).toFixed(2));
+  const validItems = items.filter((i) => i.product && i.product.isActive !== false);
+
+  const totalItems = validItems.reduce((sum, i) => sum + i.quantity, 0);
+  const subtotal = Number(validItems.reduce((sum, i) => sum + i.itemTotal, 0).toFixed(2));
   const tax = Number((subtotal * 0.08).toFixed(2));
-  const shippingFee = subtotal >= 50 || subtotal === 0 ? 0 : 5.99;
-  const totalAmount = Number((subtotal + tax + shippingFee).toFixed(2));
+  const shipping = subtotal > 100 || subtotal === 0 ? 0 : 15.0;
+  const grandTotal = Number((subtotal + tax + shipping).toFixed(2));
 
   return {
     _id: cart._id,
     userId: cart.userId,
-    items,
+    items: validItems,
     totalItems,
     subtotal,
     tax,
-    shippingFee,
-    totalAmount,
+    shipping,
+    grandTotal,
     updatedAt: cart.updatedAt,
   };
 };
