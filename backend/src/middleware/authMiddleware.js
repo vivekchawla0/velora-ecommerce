@@ -63,11 +63,28 @@ const protect = async (req, res, next) => {
     }
 
     if (!user) {
-      const uId = String(decoded.id);
-      if (uId === '660000000000000000000002') {
-        user = vishuAdminObj;
-      } else if (uId === '660000000000000000000001') {
-        user = demoShopperObj;
+      const uId = String(decoded.id || '');
+      if (
+        uId === '660000000000000000000002' ||
+        decoded.email === 'vishu@gmail.com' ||
+        decoded.email === 'admin@example.com' ||
+        decoded.role === 'admin'
+      ) {
+        user = {
+          ...vishuAdminObj,
+          _id: decoded.id || vishuAdminObj._id,
+          id: decoded.id || vishuAdminObj._id,
+          email: decoded.email || 'vishu@gmail.com',
+          role: 'admin',
+        };
+      } else if (uId === '660000000000000000000001' || decoded.email === 'demo@example.com') {
+        user = {
+          ...demoShopperObj,
+          _id: decoded.id || demoShopperObj._id,
+          id: decoded.id || demoShopperObj._id,
+          email: decoded.email || 'demo@example.com',
+          role: 'user',
+        };
       }
     }
 

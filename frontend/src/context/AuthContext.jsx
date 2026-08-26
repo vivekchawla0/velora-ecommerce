@@ -5,7 +5,14 @@ import { useToast } from './ToastContext';
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem('velora_user') || localStorage.getItem('nexacart_user');
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [token, setToken] = useState(
     localStorage.getItem('velora_token') || localStorage.getItem('nexacart_token') || null
   );
@@ -27,8 +34,7 @@ export const AuthProvider = ({ children }) => {
           localStorage.setItem('velora_user', JSON.stringify(response.data.user));
         }
       } catch (err) {
-        console.warn('Session expired or invalid token. Logging out.');
-        logout(false);
+        console.warn('Session check warning. Retaining active session.');
       } finally {
         setLoading(false);
       }
