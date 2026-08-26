@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const {
   getPersonalizedRecommendations,
   getSimilarProducts,
@@ -5,7 +6,6 @@ const {
 } = require('../services/recommendationClient');
 const RecommendationFeedback = require('../models/RecommendationFeedback');
 const Product = require('../models/Product');
-
 const Interaction = require('../models/Interaction');
 
 // @desc    Get personalized product recommendations for active/guest user (excluding already interacted items)
