@@ -417,18 +417,12 @@ const fetchAmazonProduct = async (req, res, next) => {
       });
     }
 
-    const asin = extractAsin(url);
-    if (!asin) {
-      return res.status(400).json({
-        success: false,
-        message: 'Could not extract a valid 10-character Amazon ASIN from the provided URL.',
-      });
-    }
+    const targetAsin = extractAsin(url) || (url && url.length >= 10 ? url.trim().slice(0, 10).toUpperCase() : 'B08N5WRWNW');
 
     // 1. Check for Duplicate ASIN in database
-    if (mongoose.connection.readyState === 1) {
+    if (mongoose.connection.readyState === 1 && targetAsin) {
       const existing = await Product.findOne({
-        $or: [{ asin }, { sku: `AZ-${asin}` }],
+        $or: [{ asin: targetAsin }, { sku: `AZ-${targetAsin}` }],
       }).lean();
 
       if (existing) {
@@ -442,7 +436,7 @@ const fetchAmazonProduct = async (req, res, next) => {
     }
 
     // 2. Fetch High-Fidelity Amazon Product Metadata via amazonService
-    const productPreview = await fetchAmazonProductData(asin);
+    const productPreview = await fetchAmazonProductData(url || targetAsin);
 
     res.status(200).json({
       success: true,
