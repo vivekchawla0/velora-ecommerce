@@ -506,7 +506,7 @@ const ProductCardComponent = ({
                   whiteSpace: 'nowrap',
                 }}
               >
-                ${product.originalPrice?.toFixed(2)}
+                {product.currency === 'INR' ? '₹' : '$'}{product.originalPrice?.toLocaleString('en-IN') || product.originalPrice?.toFixed(2)}
               </span>
             )}
             <span
@@ -519,7 +519,7 @@ const ProductCardComponent = ({
                 whiteSpace: 'nowrap',
               }}
             >
-              ${product.price?.toFixed(2)}
+              {product.currency === 'INR' ? '₹' : '$'}{product.price?.toLocaleString('en-IN') || product.price?.toFixed(2)}
             </span>
           </div>
 

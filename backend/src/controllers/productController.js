@@ -43,10 +43,12 @@ const getProducts = async (req, res, next) => {
     let products = [];
     let total = 0;
 
+    const isDemoMode = (process.env.PRODUCT_DATA_MODE || 'amazon').toLowerCase() === 'demo';
+
     // 1. Try DB Query ONLY if Mongoose is connected (readyState === 1)
     if (mongoose.connection.readyState === 1) {
       try {
-        const query = {};
+        const query = { isActive: { $ne: false } };
 
         if (q) {
           query.$or = [
@@ -100,12 +102,12 @@ const getProducts = async (req, res, next) => {
           Product.countDocuments(query),
         ]);
       } catch (dbErr) {
-        console.warn('[Product Controller] DB Query Failed, using seed fallback:', dbErr.message);
+        console.warn('[Product Controller] DB Query Failed:', dbErr.message);
       }
     }
 
-    // 2. If DB query returned 0 products (or DB error occurred), query fallback dataset in memory
-    if (!products || products.length === 0) {
+    // 2. Query fallback seed dataset in memory ONLY if isDemoMode is true and DB returned 0 products
+    if (isDemoMode && (!products || products.length === 0)) {
       let filtered = [...fallbackProducts];
 
       if (q) {
@@ -191,7 +193,8 @@ const getProductById = async (req, res, next) => {
       }
     }
 
-    if (!product) {
+    const isDemoMode = (process.env.PRODUCT_DATA_MODE || 'amazon').toLowerCase() === 'demo';
+    if (!product && isDemoMode) {
       product = fallbackProducts.find(
         (p) =>
           String(p._id) === String(targetId) ||

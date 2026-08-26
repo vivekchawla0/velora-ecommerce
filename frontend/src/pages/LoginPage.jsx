@@ -10,7 +10,7 @@ export const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const { login, loginAsDemoUser, loginAsAdmin } = useAuth();
+  const { login, loginAsDemoUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -22,7 +22,11 @@ export const LoginPage = () => {
     const result = await login(email, password);
     setSubmitting(false);
     if (result.success) {
-      navigate(redirectPath);
+      if (result.user?.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate(redirectPath);
+      }
     }
   };
 
@@ -32,15 +36,6 @@ export const LoginPage = () => {
     setSubmitting(false);
     if (result.success) {
       navigate(redirectPath);
-    }
-  };
-
-  const handleDemoAdminLogin = async () => {
-    setSubmitting(true);
-    const result = await loginAsAdmin();
-    setSubmitting(false);
-    if (result.success) {
-      navigate('/admin');
     }
   };
 
@@ -54,42 +49,8 @@ export const LoginPage = () => {
           </Link>
           <h1 style={{ fontSize: '1.6rem', fontWeight: 800, letterSpacing: '-0.025em' }}>Welcome back</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.885rem', marginTop: '0.25rem' }}>
-            Sign in to access your curated recommendations
+            Sign in to your account
           </p>
-        </div>
-
-        {/* 1-Click Demo Shortcut Panel */}
-        <div
-          style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-btn)',
-            padding: '1rem',
-            marginBottom: '1.75rem',
-            textAlign: 'center',
-          }}
-        >
-          <span style={{ fontSize: '0.725rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '0.65rem' }}>
-            ⚡ Instant 1-Click Demo Credentials
-          </span>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
-            <button
-              type="button"
-              onClick={handleDemoCustomerLogin}
-              className="btn btn-secondary btn-sm"
-              style={{ fontSize: '0.825rem', background: '#FFFFFF', fontWeight: 650 }}
-            >
-              Demo Shopper
-            </button>
-            <button
-              type="button"
-              onClick={handleDemoAdminLogin}
-              className="btn btn-secondary btn-sm"
-              style={{ fontSize: '0.825rem', background: '#FFFFFF', fontWeight: 650 }}
-            >
-              Demo Admin
-            </button>
-          </div>
         </div>
 
         {/* Standard Form */}
@@ -113,7 +74,6 @@ export const LoginPage = () => {
           <div className="input-group">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
               <label className="input-label" style={{ marginBottom: 0 }}>Password</label>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>admin: vishu@gmail.com / 2580</span>
             </div>
             <div style={{ position: 'relative' }}>
               <Lock size={15} color="var(--text-muted)" style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)' }} />

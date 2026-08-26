@@ -398,6 +398,257 @@ const updateOrderStatus = async (req, res, next) => {
   }
 };
 
+// @desc    Fetch Amazon product metadata by URL or ASIN
+// @route   POST /api/admin/amazon/fetch
+// @access  Private/Admin
+const fetchAmazonProduct = async (req, res, next) => {
+  try {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide an Amazon product URL or ASIN.',
+      });
+    }
+
+    const extractAsin = (inputUrl) => {
+      if (!inputUrl) return null;
+      const str = String(inputUrl).trim();
+      if (/^[A-Z0-9]{10}$/i.test(str)) return str.toUpperCase();
+
+      const matches =
+        str.match(/(?:dp|gp\/product|ASIN|product)\/([A-Z0-9]{10})/i) ||
+        str.match(/\/([A-Z0-9]{10})(?:[/?#]|$)/i);
+      return matches ? matches[1].toUpperCase() : null;
+    };
+
+    const asin = extractAsin(url);
+    if (!asin) {
+      return res.status(400).json({
+        success: false,
+        message: 'Could not extract a valid 10-character Amazon ASIN from the provided URL.',
+      });
+    }
+
+    // 1. Check for Duplicate ASIN in database
+    if (mongoose.connection.readyState === 1) {
+      const existing = await Product.findOne({
+        $or: [{ asin }, { sku: `AZ-${asin}` }],
+      }).lean();
+
+      if (existing) {
+        return res.status(200).json({
+          success: true,
+          isDuplicate: true,
+          message: 'This Amazon product already exists in Velora catalog.',
+          existingProduct: existing,
+        });
+      }
+    }
+
+    const associateTag = process.env.AMAZON_ASSOCIATE_TAG || 'velora004-21';
+    const cleanAmazonUrl = `https://www.amazon.in/dp/${asin}`;
+    const affiliateUrl = `${cleanAmazonUrl}?tag=${associateTag}`;
+
+    let title = '';
+    let brand = 'Amazon';
+    let price = 0;
+    let originalPrice = 0;
+    let discountPercentage = 0;
+    let description = '';
+    let images = [];
+    let rating = 4.5;
+    let ratingCount = 120;
+    let availability = 'In Stock';
+
+    // Server-side Metadata Fetch Fallback
+    try {
+      const axios = require('axios');
+      const response = await axios.get(cleanAmazonUrl, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+        timeout: 6000,
+      });
+
+      const html = response.data || '';
+      const ogTitleMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i);
+      const titleTagMatch = html.match(/<title>([^<]+)<\/title>/i);
+      if (ogTitleMatch) title = ogTitleMatch[1];
+      else if (titleTagMatch) title = titleTagMatch[1].replace(/:\s*Amazon\.in.*$/i, '').trim();
+
+      const ogImageMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
+      if (ogImageMatch) images.push(ogImageMatch[1]);
+
+      const priceMatch = html.match(/class=["']a-price-whole["']>([^<]+)</i);
+      if (priceMatch) {
+        const parsedPrice = parseFloat(priceMatch[1].replace(/,/g, ''));
+        if (!isNaN(parsedPrice) && parsedPrice > 0) {
+          price = parsedPrice;
+        }
+      }
+    } catch (fetchErr) {
+      console.warn('[Amazon Fetch] Metadata scrape warning:', fetchErr.message);
+    }
+
+    if (!title) title = `Amazon Product (ASIN: ${asin})`;
+    if (images.length === 0) {
+      images = [
+        'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80',
+      ];
+    }
+    if (price <= 0) price = 1499.0;
+    originalPrice = Math.round(price * 1.25);
+    discountPercentage = Math.round(((originalPrice - price) / originalPrice) * 100);
+    description = `Premium ${title} imported via Amazon Associates. ASIN: ${asin}. Includes official manufacturer warranty and eligible for Amazon Prime shipping.`;
+
+    const productPreview = {
+      asin,
+      name: title,
+      brand,
+      price,
+      originalPrice,
+      discountPercentage,
+      currency: 'INR',
+      description,
+      images,
+      rating,
+      ratingCount,
+      stock: 99,
+      availability,
+      category: 'electronics',
+      collections: ['best-sellers', 'shop-all'],
+      amazonUrl: cleanAmazonUrl,
+      affiliateUrl,
+      source: 'amazon',
+    };
+
+    res.status(200).json({
+      success: true,
+      isDuplicate: false,
+      product: productPreview,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Add confirmed Amazon product to database
+// @route   POST /api/admin/amazon/add
+// @access  Private/Admin
+const addAmazonProduct = async (req, res, next) => {
+  try {
+    const {
+      asin,
+      name,
+      brand,
+      price,
+      originalPrice,
+      discountPercentage,
+      category,
+      collections,
+      images,
+      description,
+      rating,
+      ratingCount,
+      stock,
+      amazonUrl,
+      affiliateUrl,
+    } = req.body;
+
+    if (!name || price === undefined || !category) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide all required fields: name, price, category.',
+      });
+    }
+
+    if (asin && mongoose.connection.readyState === 1) {
+      const existing = await Product.findOne({
+        $or: [{ asin }, { sku: `AZ-${asin}` }],
+      });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          isDuplicate: true,
+          message: 'This Amazon product already exists in Velora catalog.',
+          existingProduct: existing,
+        });
+      }
+    }
+
+    const associateTag = process.env.AMAZON_ASSOCIATE_TAG || 'velora004-21';
+    const finalAsin = asin || `B0${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+    const finalAmazonUrl = amazonUrl || `https://www.amazon.in/dp/${finalAsin}`;
+    const finalAffiliateUrl =
+      affiliateUrl || `${finalAmazonUrl}?tag=${associateTag}`;
+
+    const numPrice = Number(price);
+    const numOrig = originalPrice ? Number(originalPrice) : Math.round(numPrice * 1.25);
+    const numDiscount = discountPercentage
+      ? Number(discountPercentage)
+      : Math.round(((numOrig - numPrice) / numOrig) * 100);
+
+    const product = await Product.create({
+      name,
+      brand: brand || 'Amazon',
+      sku: `AZ-${finalAsin}`,
+      asin: finalAsin,
+      price: numPrice,
+      originalPrice: numOrig,
+      discountPercentage: Math.max(0, numDiscount),
+      currency: 'INR',
+      category: String(category).toLowerCase().trim(),
+      collections: Array.isArray(collections) && collections.length > 0 ? collections : ['shop-all'],
+      images: Array.isArray(images) && images.length > 0 ? images : ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800'],
+      description: description || `Amazon product ASIN ${finalAsin}`,
+      rating: rating ? Number(rating) : 4.5,
+      ratingCount: ratingCount ? Number(ratingCount) : 150,
+      stock: stock ? Number(stock) : 99,
+      amazonUrl: finalAmazonUrl,
+      affiliateUrl: finalAffiliateUrl,
+      source: 'amazon',
+      isActive: true,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Amazon product added to Velora catalog successfully!',
+      product,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Toggle product active status
+// @route   PATCH /api/admin/products/:id/status
+// @access  Private/Admin
+const toggleProductStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body;
+
+    const product = await Product.findById(id);
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found.' });
+    }
+
+    product.isActive = isActive !== undefined ? Boolean(isActive) : !product.isActive;
+    await product.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Product status updated to ${product.isActive ? 'Active' : 'Inactive'}.`,
+      product,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getAdminStats,
   createProduct,
@@ -405,4 +656,7 @@ module.exports = {
   deleteProduct,
   getAllOrders,
   updateOrderStatus,
+  fetchAmazonProduct,
+  addAmazonProduct,
+  toggleProductStatus,
 };

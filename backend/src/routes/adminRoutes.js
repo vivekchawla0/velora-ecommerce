@@ -7,6 +7,9 @@ const {
   deleteProduct,
   getAllOrders,
   updateOrderStatus,
+  fetchAmazonProduct,
+  addAmazonProduct,
+  toggleProductStatus,
 } = require('../controllers/adminController');
 const {
   getUserStats,
@@ -33,7 +36,12 @@ router.get('/stats', getAdminStats);
 // Product Management
 router.post('/products', createProduct);
 router.put('/products/:id', updateProduct);
+router.patch('/products/:id/status', toggleProductStatus);
 router.delete('/products/:id', deleteProduct);
+
+// Amazon Product Affiliate Management
+router.post('/amazon/fetch', fetchAmazonProduct);
+router.post('/amazon/add', addAmazonProduct);
 
 // Order Management
 router.get('/orders', getAllOrders);

@@ -56,7 +56,81 @@ export const AdminDashboardPage = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
 
+  // Amazon Affiliate Product State
+  const [amazonUrl, setAmazonUrl] = useState('');
+  const [amazonDept, setAmazonDept] = useState('electronics');
+  const [amazonColl, setAmazonColl] = useState('best-sellers');
+  const [fetchingAmazon, setFetchingAmazon] = useState(false);
+  const [amazonPreview, setAmazonPreview] = useState(null);
+  const [savingAmazon, setSavingAmazon] = useState(false);
+  const [amazonError, setAmazonError] = useState(null);
+
   const toast = useToast();
+
+  const handleFetchAmazonProduct = async (e) => {
+    if (e) e.preventDefault();
+    if (!amazonUrl.trim()) {
+      toast.error('Please paste an Amazon product URL or ASIN.');
+      return;
+    }
+    setFetchingAmazon(true);
+    setAmazonError(null);
+    setAmazonPreview(null);
+    try {
+      const res = await api.post('/admin/amazon/fetch', { url: amazonUrl.trim() });
+      if (res.data?.success) {
+        if (res.data.isDuplicate) {
+          toast.warning(res.data.message);
+          setAmazonPreview({ ...res.data.existingProduct, isDuplicate: true });
+        } else {
+          toast.success('Amazon product metadata retrieved successfully!');
+          setAmazonPreview({ ...res.data.product, category: amazonDept, collections: [amazonColl] });
+        }
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to retrieve Amazon product metadata.';
+      setAmazonError(msg);
+      toast.error(msg);
+    } finally {
+      setFetchingAmazon(false);
+    }
+  };
+
+  const handleAddAmazonProduct = async () => {
+    if (!amazonPreview) return;
+    setSavingAmazon(true);
+    try {
+      const payload = {
+        ...amazonPreview,
+        category: amazonDept,
+        collections: [amazonColl, 'shop-all'],
+      };
+      const res = await api.post('/admin/amazon/add', payload);
+      if (res.data?.success) {
+        toast.success('Amazon product added to Velora catalog!');
+        setAmazonPreview(null);
+        setAmazonUrl('');
+        loadAdminData();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to save Amazon product.');
+    } finally {
+      setSavingAmazon(false);
+    }
+  };
+
+  const handleToggleProductStatus = async (prod) => {
+    const nextStatus = prod.isActive === false ? true : false;
+    try {
+      const res = await api.patch(`/admin/products/${prod._id}/status`, { isActive: nextStatus });
+      if (res.data?.success) {
+        toast.success(`Product status set to ${nextStatus ? 'Active' : 'Inactive'}`);
+        loadAdminData();
+      }
+    } catch (err) {
+      toast.error('Failed to toggle product status.');
+    }
+  };
 
   const loadAdminData = async () => {
     setLoading(true);
@@ -269,9 +343,10 @@ export const AdminDashboardPage = () => {
       <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border)', marginBottom: '2rem', overflowX: 'auto' }}>
         {[
           { id: 'overview', label: 'Overview & Metrics' },
+          { id: 'amazon', label: 'Add Amazon Product 🛍' },
+          { id: 'products', label: `Products (${products.length})` },
           { id: 'users', label: `Users (${userStats?.totalUsers || stats?.totalUsers || 0})` },
           { id: 'analytics', label: 'ML & Recommendations' },
-          { id: 'products', label: `Products (${products.length})` },
           { id: 'orders', label: `Orders (${orders.length})` },
         ].map((tab) => (
           <button
@@ -418,7 +493,167 @@ export const AdminDashboardPage = () => {
         </div>
       )}
 
-      {/* 2. USERS MANAGEMENT TAB */}
+      {/* 2. AMAZON PRODUCTS TAB */}
+      {activeTab === 'amazon' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+          <div className="card-panel" style={{ padding: '2rem' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <ExternalLink size={20} color="var(--accent)" /> Add Amazon Affiliate Product
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
+              Paste any Amazon product URL or 10-character ASIN. The system will retrieve product metadata and append your Associate tracking tag automatically.
+            </p>
+
+            <form onSubmit={handleFetchAmazonProduct}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '1rem', alignItems: 'flex-end' }} className="amazon-form-grid">
+                <div>
+                  <label className="input-label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
+                    Amazon Affiliate URL or ASIN
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={amazonUrl}
+                    onChange={(e) => setAmazonUrl(e.target.value)}
+                    placeholder="https://www.amazon.in/dp/B0CX55N69G or B0CX55N69G"
+                    className="input-field"
+                    style={{ fontSize: '0.875rem' }}
+                  />
+                </div>
+
+                <div>
+                  <label className="input-label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
+                    Department (Category)
+                  </label>
+                  <select
+                    value={amazonDept}
+                    onChange={(e) => setAmazonDept(e.target.value)}
+                    className="select-field"
+                    style={{ fontSize: '0.85rem' }}
+                  >
+                    <option value="electronics">Electronics</option>
+                    <option value="audio">Audio & Acoustics</option>
+                    <option value="fashion">Fashion & Apparel</option>
+                    <option value="home-living">Home & Living</option>
+                    <option value="gaming">Gaming</option>
+                    <option value="beauty">Beauty & Personal Care</option>
+                    <option value="books-learning">Books & Learning</option>
+                    <option value="sports-fitness">Sports & Fitness</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="input-label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
+                    Collection
+                  </label>
+                  <select
+                    value={amazonColl}
+                    onChange={(e) => setAmazonColl(e.target.value)}
+                    className="select-field"
+                    style={{ fontSize: '0.85rem' }}
+                  >
+                    <option value="best-sellers">Best Sellers</option>
+                    <option value="new-arrivals">New Arrivals</option>
+                    <option value="featured">Featured</option>
+                    <option value="trending">Trending</option>
+                    <option value="shop-all">Shop All</option>
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={fetchingAmazon}
+                  className="btn btn-primary"
+                  style={{ height: '42px', padding: '0 1.5rem', fontWeight: 750 }}
+                >
+                  {fetchingAmazon ? 'Fetching...' : 'Fetch Product'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Amazon Product Preview Card */}
+          {amazonPreview && (
+            <div className="card-panel" style={{ padding: '2rem', border: '2px solid var(--accent)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                <span className="badge badge-curated" style={{ fontSize: '0.8rem' }}>
+                  Product Preview (Source: Amazon Affiliate)
+                </span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  ASIN: <strong>{amazonPreview.asin}</strong>
+                </span>
+              </div>
+
+              {amazonPreview.isDuplicate && (
+                <div style={{ padding: '1rem', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 'var(--radius-md)', color: '#991B1B', marginBottom: '1.5rem', fontSize: '0.875rem' }}>
+                  ⚠️ <strong>This Amazon product already exists in Velora catalog.</strong> Duplicates are prevented automatically.
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: '2rem', marginBottom: '2rem' }} className="amazon-preview-grid">
+                <div style={{ background: '#FFFFFF', padding: '1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img
+                    src={amazonPreview.images?.[0]}
+                    alt={amazonPreview.name}
+                    style={{ maxWidth: '100%', maxHeight: '180px', objectFit: 'contain' }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
+                    {amazonPreview.brand || 'Amazon'}
+                  </span>
+                  <h3 style={{ fontSize: '1.35rem', fontWeight: 800, lineHeight: 1.3 }}>{amazonPreview.name}</h3>
+
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
+                    <span style={{ fontSize: '1.6rem', fontWeight: 850 }}>₹{amazonPreview.price?.toLocaleString('en-IN')}</span>
+                    {amazonPreview.originalPrice > amazonPreview.price && (
+                      <span style={{ fontSize: '1rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+                        ₹{amazonPreview.originalPrice?.toLocaleString('en-IN')}
+                      </span>
+                    )}
+                    <span className="badge badge-success">★ {amazonPreview.rating} ({amazonPreview.ratingCount} reviews)</span>
+                  </div>
+
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.5 }}>
+                    {amazonPreview.description}
+                  </p>
+
+                  <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                    <span>Department: <strong style={{ color: 'var(--text-primary)', textTransform: 'capitalize' }}>{amazonDept}</strong></span>
+                    <span>•</span>
+                    <span>Collection: <strong style={{ color: 'var(--text-primary)', textTransform: 'capitalize' }}>{amazonColl}</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setAmazonPreview(null)}
+                  className="btn btn-secondary"
+                >
+                  Cancel
+                </button>
+
+                {!amazonPreview.isDuplicate && (
+                  <button
+                    type="button"
+                    onClick={handleAddAmazonProduct}
+                    disabled={savingAmazon}
+                    className="btn btn-primary"
+                    style={{ fontWeight: 750, padding: '0.6rem 1.75rem' }}
+                  >
+                    {savingAmazon ? 'Saving Product...' : 'Add to Velora Catalog'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 3. USERS MANAGEMENT TAB */}
       {activeTab === 'users' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           {/* User Management Real Statistics */}
@@ -809,62 +1044,78 @@ export const AdminDashboardPage = () => {
       {/* 4. PRODUCTS TAB */}
       {activeTab === 'products' && (
         <div className="card-panel table-responsive-wrapper" style={{ padding: '1.5rem', overflowX: 'auto' }}>
-          <table style={{ width: '100%', minWidth: '680px', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+          <table style={{ width: '100%', minWidth: '780px', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' }}>
                 <th style={{ padding: '0.75rem' }}>Product</th>
+                <th style={{ padding: '0.75rem' }}>Source</th>
                 <th style={{ padding: '0.75rem' }}>Category</th>
                 <th style={{ padding: '0.75rem' }}>Price</th>
-                <th style={{ padding: '0.75rem' }}>Stock</th>
+                <th style={{ padding: '0.75rem' }}>Status</th>
                 <th style={{ padding: '0.75rem' }}>Rating</th>
                 <th style={{ padding: '0.75rem', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {products.map((prod) => (
-                <tr key={prod._id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                  <td style={{ padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <img
-                      src={prod.images?.[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100'}
-                      alt={prod.name}
-                      style={{ width: '38px', height: '38px', objectFit: 'contain', background: '#FBFBFA', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}
-                    />
-                    <div>
-                      <strong style={{ display: 'block', fontSize: '0.875rem' }}>{prod.name}</strong>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{prod.brand}</span>
-                    </div>
-                  </td>
-                  <td style={{ padding: '0.75rem', textTransform: 'capitalize' }}>{prod.category}</td>
-                  <td style={{ padding: '0.75rem', fontWeight: 700 }}>${prod.price?.toFixed(2)}</td>
-                  <td style={{ padding: '0.75rem' }}>
-                    <span className={`badge ${prod.stock > 10 ? 'badge-neutral' : 'badge-danger'}`}>
-                      {prod.stock} in stock
-                    </span>
-                  </td>
-                  <td style={{ padding: '0.75rem' }}>★ {prod.rating?.toFixed(1)}</td>
-                  <td style={{ padding: '0.75rem', textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: '0.5rem' }}>
+              {products.map((prod) => {
+                const isAmazon = prod.source === 'amazon' || !!prod.asin || !!prod.affiliateUrl;
+                const isActive = prod.isActive !== false;
+
+                return (
+                  <tr key={prod._id} style={{ borderBottom: '1px solid var(--border-light)', opacity: isActive ? 1 : 0.6 }}>
+                    <td style={{ padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <img
+                        src={prod.images?.[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100'}
+                        alt={prod.name}
+                        style={{ width: '38px', height: '38px', objectFit: 'contain', background: '#FBFBFA', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}
+                      />
+                      <div>
+                        <strong style={{ display: 'block', fontSize: '0.875rem' }}>{prod.name}</strong>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{prod.brand} {prod.asin ? `• ASIN: ${prod.asin}` : ''}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '0.75rem' }}>
+                      <span className={`badge ${isAmazon ? 'badge-curated' : 'badge-neutral'}`}>
+                        {isAmazon ? 'Amazon Affiliate' : 'Catalog'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '0.75rem', textTransform: 'capitalize' }}>{prod.category}</td>
+                    <td style={{ padding: '0.75rem', fontWeight: 700 }}>₹{prod.price?.toLocaleString('en-IN') || prod.price?.toFixed(2)}</td>
+                    <td style={{ padding: '0.75rem' }}>
                       <button
-                        onClick={() => {
-                          setEditingProduct(prod);
-                          setModalOpen(true);
-                        }}
-                        style={{ color: 'var(--text-primary)', padding: '4px' }}
-                        aria-label="Edit product"
+                        onClick={() => handleToggleProductStatus(prod)}
+                        className={`badge ${isActive ? 'badge-success' : 'badge-danger'}`}
+                        style={{ border: 'none', cursor: 'pointer' }}
+                        title="Click to toggle Active/Inactive status"
                       >
-                        <Edit2 size={15} />
+                        {isActive ? 'Active' : 'Inactive'}
                       </button>
-                      <button
-                        onClick={() => handleDeleteProduct(prod._id, prod.name)}
-                        style={{ color: '#B91C1C', padding: '4px' }}
-                        aria-label="Delete product"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td style={{ padding: '0.75rem' }}>★ {prod.rating?.toFixed(1)}</td>
+                    <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <button
+                          onClick={() => {
+                            setEditingProduct(prod);
+                            setModalOpen(true);
+                          }}
+                          style={{ color: 'var(--text-primary)', padding: '4px', background: 'none', border: 'none', cursor: 'pointer' }}
+                          aria-label="Edit product"
+                        >
+                          <Edit2 size={15} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProduct(prod._id, prod.name)}
+                          style={{ color: '#B91C1C', padding: '4px', background: 'none', border: 'none', cursor: 'pointer' }}
+                          aria-label="Delete product"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

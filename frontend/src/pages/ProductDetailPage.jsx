@@ -15,6 +15,7 @@ import {
   MessageSquare,
   CheckCircle2,
   Trash2,
+  ExternalLink,
 } from 'lucide-react';
 import api from '../api/client';
 import { useCart } from '../context/CartContext';
@@ -160,6 +161,13 @@ export const ProductDetailPage = () => {
 
   const handleBuyNow = async () => {
     if (!product) return;
+    const destUrl = product.affiliateUrl || product.amazonUrl;
+    if (product.source === 'amazon' || destUrl) {
+      if (destUrl) {
+        window.open(destUrl, '_blank', 'noopener,noreferrer');
+        return;
+      }
+    }
     if (!isAdded) {
       const result = await addToCart(product, quantity);
       if (result?.success === false) return;
@@ -409,12 +417,12 @@ export const ProductDetailPage = () => {
             }}
           >
             <span style={{ fontSize: '2.1rem', fontWeight: 850, color: 'var(--text-primary)' }}>
-              ${product.price?.toFixed(2)}
+              {product.currency === 'INR' ? '₹' : '$'}{product.price?.toLocaleString('en-IN') || product.price?.toFixed(2)}
             </span>
             {product.originalPrice && product.originalPrice > product.price && (
               <>
                 <span style={{ fontSize: '1.15rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
-                  ${product.originalPrice?.toFixed(2)}
+                  {product.currency === 'INR' ? '₹' : '$'}{product.originalPrice?.toLocaleString('en-IN') || product.originalPrice?.toFixed(2)}
                 </span>
                 <span className="badge badge-discount">
                   Save {product.discountPercentage}%
@@ -501,14 +509,20 @@ export const ProductDetailPage = () => {
               </button>
             </div>
 
-            {/* Instant Checkout CTA */}
+            {/* Instant Checkout CTA / Amazon Buy Now */}
             <button
               onClick={handleBuyNow}
               disabled={product.stock <= 0}
               className="btn btn-secondary btn-lg"
-              style={{ width: '100%', borderColor: 'var(--border-hover)', fontWeight: 750 }}
+              style={{ width: '100%', borderColor: 'var(--border-hover)', fontWeight: 750, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem' }}
             >
-              Instant Checkout
+              {product.source === 'amazon' || product.affiliateUrl ? (
+                <>
+                  Buy Now on Amazon <ExternalLink size={16} />
+                </>
+              ) : (
+                'Instant Checkout'
+              )}
             </button>
           </div>
 

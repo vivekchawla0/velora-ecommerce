@@ -89,6 +89,39 @@ const productSchema = new mongoose.Schema(
       of: String,
       default: {},
     },
+    asin: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    amazonUrl: {
+      type: String,
+      trim: true,
+    },
+    affiliateUrl: {
+      type: String,
+      trim: true,
+    },
+    source: {
+      type: String,
+      enum: ['amazon', 'catalog', 'demo'],
+      default: 'catalog',
+      index: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
+    collections: {
+      type: [String],
+      default: ['shop-all'],
+      index: true,
+    },
+    currency: {
+      type: String,
+      default: 'INR',
+    },
   },
   {
     timestamps: true,
