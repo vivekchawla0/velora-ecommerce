@@ -774,30 +774,36 @@ export const AdminDashboardPage = () => {
 
               {/* Read-Only Amazon Scraped Price Banner & Brand */}
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem', marginBottom: '1.5rem', alignItems: 'center' }}>
-                <div style={{ padding: '1rem 1.25rem', background: '#F8FAFC', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                <div style={{ padding: '1rem 1.25rem', background: amazonPreview.priceUnavailable || !amazonPreview.price ? '#FEF2F2' : '#F8FAFC', border: '1px solid', borderColor: amazonPreview.priceUnavailable || !amazonPreview.price ? '#FECACA' : 'var(--border)', borderRadius: 'var(--radius-md)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
-                    <span style={{ fontSize: '0.725rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
-                      Scraped Amazon Link Price (Read-Only)
+                    <span style={{ fontSize: '0.725rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: amazonPreview.priceUnavailable || !amazonPreview.price ? '#991B1B' : 'var(--text-muted)' }}>
+                      {amazonPreview.priceUnavailable || !amazonPreview.price ? 'Amazon Price Status' : 'Fetched Amazon Link Price (Read-Only)'}
                     </span>
-                    <span style={{ fontSize: '0.75rem', color: '#15803D', fontWeight: 700 }}>
-                      ✓ Fetched directly from link
+                    <span style={{ fontSize: '0.75rem', color: amazonPreview.priceUnavailable || !amazonPreview.price ? '#991B1B' : '#15803D', fontWeight: 700 }}>
+                      {amazonPreview.priceUnavailable || !amazonPreview.price ? '⚠️ Price Unavailable' : '✓ Verified from Link'}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.85rem' }}>
-                    <span style={{ fontSize: '1.65rem', fontWeight: 850, color: 'var(--text-primary)' }}>
-                      ₹{amazonPreview.price?.toLocaleString('en-IN')}
-                    </span>
-                    {amazonPreview.originalPrice > amazonPreview.price && (
-                      <span style={{ fontSize: '1.05rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
-                        ₹{amazonPreview.originalPrice?.toLocaleString('en-IN')}
+                  {amazonPreview.priceUnavailable || !amazonPreview.price ? (
+                    <p style={{ fontSize: '0.85rem', color: '#991B1B', margin: 0, fontWeight: 650 }}>
+                      Amazon anti-bot protection or variant selector hid the price for this ASIN. Price could not be verified automatically.
+                    </p>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.85rem' }}>
+                      <span style={{ fontSize: '1.65rem', fontWeight: 850, color: 'var(--text-primary)' }}>
+                        ₹{amazonPreview.price?.toLocaleString('en-IN')}
                       </span>
-                    )}
-                    {amazonPreview.discountPercentage > 0 && (
-                      <span className="badge badge-success">
-                        Save {amazonPreview.discountPercentage}%
-                      </span>
-                    )}
-                  </div>
+                      {amazonPreview.originalPrice > amazonPreview.price && (
+                        <span style={{ fontSize: '1.05rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+                          ₹{amazonPreview.originalPrice?.toLocaleString('en-IN')}
+                        </span>
+                      )}
+                      {amazonPreview.discountPercentage > 0 && (
+                        <span className="badge badge-success">
+                          Save {amazonPreview.discountPercentage}%
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div>

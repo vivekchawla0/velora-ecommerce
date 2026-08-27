@@ -223,45 +223,81 @@ const fetchAmazonProductData = async (asinInput) => {
       imageSet.add(cleanAmazonImageUrl(ogImageMatch[1]));
     }
 
-    // Extract Price (INR)
-    let price = 0;
-    let originalPrice = 0;
+    // Targeted Amazon Price Extractor (Selling Price & List Price)
+    let price = null;
+    let originalPrice = null;
 
-    const priceWholeMatch = html.match(/class=["']a-price-whole["'][^>]*>\s*([0-9,]+)/i);
-    const apexPriceMatch = html.match(/class=["']apexPriceToPay["'][^>]*>[\s\S]*?class=["']a-offscreen["'][^>]*>\s*[$₹]?\s*([0-9,.]+)/i) ||
-      html.match(/class=["']priceToPay["'][^>]*>[\s\S]*?class=["']a-offscreen["'][^>]*>\s*[$₹]?\s*([0-9,.]+)/i);
+    // 1. Check embedded JSON price data (twister, buybox, priceBlock)
+    const jsonPriceMatch = html.match(/["']priceAmount["']\s*:\s*([0-9.]+)/i) ||
+      html.match(/["']buyingPrice["']\s*:\s*([0-9.]+)/i) ||
+      html.match(/["']priceToPay["']\s*:\s*([0-9.]+)/i);
 
-    if (priceWholeMatch) {
-      price = parseFloat(priceWholeMatch[1].replace(/,/g, ''));
-    } else if (apexPriceMatch) {
-      price = parseFloat(apexPriceMatch[1].replace(/,/g, ''));
-    }
-
-    const basisPriceMatch = html.match(/class=["']a-text-price["'][^>]*>[\s\S]*?class=["']a-offscreen["'][^>]*>\s*[$₹]?\s*([0-9,.]+)/i);
-    if (basisPriceMatch) {
-      const parsedBasis = parseFloat(basisPriceMatch[1].replace(/,/g, ''));
-      if (!isNaN(parsedBasis) && parsedBasis > price) {
-        originalPrice = parsedBasis;
+    if (jsonPriceMatch && jsonPriceMatch[1]) {
+      const parsedJsonPrice = parseFloat(jsonPriceMatch[1]);
+      if (!isNaN(parsedJsonPrice) && parsedJsonPrice > 0) {
+        price = parsedJsonPrice;
       }
     }
 
-    // Handle USD to INR conversion if link was amazon.com
+    // 2. Targeted CSS Container Selectors for Selling Price
+    if (!price) {
+      const apexMatch = html.match(/class=["'][^"']*apexPriceToPay[^"']*["'][^>]*>[\s\S]*?class=["']a-offscreen["'][^>]*>\s*[$₹]?\s*([0-9,.]+)/i) ||
+        html.match(/class=["'][^"']*priceToPay[^"']*["'][^>]*>[\s\S]*?class=["']a-offscreen["'][^>]*>\s*[$₹]?\s*([0-9,.]+)/i) ||
+        html.match(/id=["']priceblock_ourprice["'][^>]*>\s*[$₹]?\s*([0-9,.]+)/i) ||
+        html.match(/id=["']priceblock_dealprice["'][^>]*>\s*[$₹]?\s*([0-9,.]+)/i) ||
+        html.match(/id=["']price_inside_buybox["'][^>]*>\s*[$₹]?\s*([0-9,.]+)/i) ||
+        html.match(/meta\s+property=["']og:price:amount["']\s+content=["']([0-9,.]+)["']/i);
+
+      if (apexMatch && apexMatch[1]) {
+        const parsedApex = parseFloat(apexMatch[1].replace(/,/g, ''));
+        if (!isNaN(parsedApex) && parsedApex > 0) {
+          price = parsedApex;
+        }
+      }
+    }
+
+    // 3. Fallback to corePrice container whole price ONLY if > 50
+    if (!price) {
+      const corePriceBlock = html.match(/id=["'](?:corePrice_feature_div|corePriceDisplay_desktop_feature_div)["'][\s\S]*?<\/div>/i);
+      if (corePriceBlock) {
+        const wholeMatch = corePriceBlock[0].match(/class=["']a-price-whole["'][^>]*>\s*([0-9,]+)/i);
+        if (wholeMatch) {
+          const parsedWhole = parseFloat(wholeMatch[1].replace(/,/g, ''));
+          if (!isNaN(parsedWhole) && parsedWhole >= 50) {
+            price = parsedWhole;
+          }
+        }
+      }
+    }
+
+    // Targeted List Price (Original MRP) Extractor
+    const listPriceMatch = html.match(/class=["'][^"']*a-text-price[^"']*["'][^>]*>[\s\S]*?class=["']a-offscreen["'][^>]*>\s*[$₹]?\s*([0-9,.]+)/i) ||
+      html.match(/class=["'][^"']*basisPrice[^"']*["'][^>]*>[\s\S]*?class=["']a-offscreen["'][^>]*>\s*[$₹]?\s*([0-9,.]+)/i) ||
+      html.match(/id=["']priceblock_listprice["'][^>]*>\s*[$₹]?\s*([0-9,.]+)/i);
+
+    if (listPriceMatch && listPriceMatch[1]) {
+      const parsedList = parseFloat(listPriceMatch[1].replace(/,/g, ''));
+      if (!isNaN(parsedList) && parsedList > (price || 0)) {
+        originalPrice = parsedList;
+      }
+    }
+
+    // Currency Conversion for amazon.com (USD -> INR)
     const isAmazonCom = targetUrl.includes('amazon.com');
-    if (isAmazonCom && price > 0 && price < 300) {
+    if (isAmazonCom && price && price > 0 && price < 500) {
       price = Math.round(price * 83);
-    }
-    if (isAmazonCom && originalPrice > 0 && originalPrice < 400) {
-      originalPrice = Math.round(originalPrice * 83);
-    }
-
-    if (!originalPrice || originalPrice <= price) {
-      originalPrice = price > 0 ? Math.round(price * 1.25) : 1999;
+      if (originalPrice && originalPrice > 0 && originalPrice < 600) {
+        originalPrice = Math.round(originalPrice * 83);
+      }
     }
 
-    const discountPercentage =
-      originalPrice > price && price > 0
-        ? Math.round(((originalPrice - price) / originalPrice) * 100)
-        : 25;
+    // Calculate Discount ONLY if both authentic prices exist
+    let discountPercentage = 0;
+    if (price && originalPrice && originalPrice > price) {
+      discountPercentage = Math.round(((originalPrice - price) / originalPrice) * 100);
+    } else {
+      originalPrice = price; // DO NOT fabricate artificial 1.25 multiplier!
+    }
 
     // Extract Rating & Rating Count
     let rating = 4.5;
@@ -291,9 +327,9 @@ const fetchAmazonProductData = async (asinInput) => {
     const fallbackTitle = extractTitleFromUrl(asinInput) || `Amazon Catalog Item (${asin})`;
 
     const finalName = title || fallbackTitle;
-    const finalPrice = price > 0 ? price : 1499;
-    const finalOriginalPrice = originalPrice > finalPrice ? originalPrice : Math.round(finalPrice * 1.25);
-    const finalDiscount = finalOriginalPrice > finalPrice ? Math.round(((finalOriginalPrice - finalPrice) / finalOriginalPrice) * 100) : 0;
+    const finalPrice = price && price > 0 ? price : null;
+    const finalOriginalPrice = originalPrice && finalPrice && originalPrice > finalPrice ? originalPrice : finalPrice;
+    const finalDiscount = finalOriginalPrice && finalPrice && finalOriginalPrice > finalPrice ? Math.round(((finalOriginalPrice - finalPrice) / finalOriginalPrice) * 100) : 0;
 
     return {
       asin,
@@ -302,6 +338,7 @@ const fetchAmazonProductData = async (asinInput) => {
       price: finalPrice,
       originalPrice: finalOriginalPrice,
       discountPercentage: finalDiscount,
+      priceUnavailable: !finalPrice,
       currency: 'INR',
       description: features.length > 0 ? features.join('. ') : `${finalName} - Official Amazon catalog product metadata.`,
       features: features.length > 0 ? features : [

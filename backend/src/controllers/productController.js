@@ -4,17 +4,19 @@ const Category = require('../models/Category');
 const { productsData, categoriesData } = require('../scripts/seed');
 
 // Format fallback products dataset with IDs and default timestamps
-const fallbackProducts = (productsData || []).map((p, idx) => ({
-  _id: p._id || `seed_prod_${p.sku || idx + 1}`,
-  ...p,
-  createdAt: p.createdAt || new Date(Date.now() - idx * 3600000).toISOString(),
-}));
+const getFallbackProducts = () => {
+  return (productsData || []).map((p, idx) => ({
+    _id: p._id || `seed_prod_${p.sku || idx + 1}`,
+    ...p,
+    createdAt: p.createdAt || new Date(Date.now() - idx * 3600000).toISOString(),
+  }));
+};
 
 const fallbackCategories = categoriesData || [];
 
 // Compute category counts for fallback dataset
 const fallbackCountMap = new Map();
-fallbackProducts.forEach((p) => {
+getFallbackProducts().forEach((p) => {
   if (p.category) {
     const key = String(p.category).toLowerCase();
     fallbackCountMap.set(key, (fallbackCountMap.get(key) || 0) + 1);
@@ -123,7 +125,7 @@ const getProducts = async (req, res, next) => {
 
     // 2. Query fallback seed dataset in memory ONLY if isDemoMode is true and DB returned 0 products
     if (isDemoMode && (!products || products.length === 0)) {
-      let filtered = [...fallbackProducts];
+      let filtered = [...getFallbackProducts()];
 
       if (q) {
         const lq = q.toLowerCase();
@@ -219,7 +221,7 @@ const getProductById = async (req, res, next) => {
 
     const isDemoMode = (process.env.PRODUCT_DATA_MODE || 'amazon').toLowerCase() === 'demo';
     if (!product && isDemoMode) {
-      product = fallbackProducts.find(
+      product = getFallbackProducts().find(
         (p) =>
           String(p._id) === String(targetId) ||
           String(p.id) === String(targetId) ||
